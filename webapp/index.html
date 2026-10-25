@@ -559,6 +559,35 @@ const store = {
 let last = null, sortKey = 'score', sortDesc = true, open = null, seenFull = null, timer = null;
 let journal = store.get('mfs_journal', []);
 
+/* Telegram cloud storage: survives closing the Mini App and syncs across your devices
+   (the in-app browser's own storage is often wiped). Values are capped at 4 KB, so the journal is chunked. */
+const cloud = (() => { try { const tg = window.Telegram && window.Telegram.WebApp;
+  return tg && tg.initData && tg.CloudStorage && (!tg.isVersionAtLeast || tg.isVersionAtLeast('6.9')) ? tg.CloudStorage : null; } catch(e){ return null; } })();
+function cloudSet(prefix, value){
+  if (!cloud) return;
+  try {
+    const parts = JSON.stringify(value).match(/[\s\S]{1,3900}/g) || ['null'];
+    parts.forEach((p, i) => cloud.setItem(prefix + i, p));
+    cloud.setItem(prefix + 'n', String(parts.length));
+  } catch(e){}
+}
+function cloudGet(prefix, cb){
+  if (!cloud) return;
+  try {
+    cloud.getItem(prefix + 'n', (err, n) => {
+      n = +n || 0; if (err || !n) return cb(null);
+      const keys = Array.from({length:n}, (_, i) => prefix + i);
+      cloud.getItems(keys, (e2, vals) => { if (e2 || !vals) return cb(null);
+        try { cb(JSON.parse(keys.map(k => vals[k] || '').join(''))); } catch(e){ cb(null); } });
+    });
+  } catch(e){ cb(null); }
+}
+function saveJournal(){
+  journal = journal.slice(0, 400);                  // keep the most recent 400 picks
+  store.set('mfs_journal', journal); cloudSet('mfsj_', journal);
+}
+function saveSettingsObj(o){ store.set('mfs_settings', o); cloudSet('mfss_', o); }
+
 /* settings */
 const SET_IDS = ['acct','riskPct','atrMult','t1R','t2R','nMovers','minVol','autoMin'];
 const saved = store.get('mfs_settings', {});
@@ -566,9 +595,17 @@ SET_IDS.forEach(id => { if (saved[id] != null) $('#'+id).value = saved[id]; $('#
 if (saved.incDump != null) $('#incDump').checked = saved.incDump;
 function saveSettings(){
   const o = {}; SET_IDS.forEach(id => o[id] = +$('#'+id).value); o.incDump = $('#incDump').checked;
-  store.set('mfs_settings', o); if (last){ renderCoins(); renderTable(); }
+  saveSettingsObj(o); if (last){ renderCoins(); renderTable(); }
 }
 $('#incDump').onchange = saveSettings;
+cloudGet('mfss_', o => { if (!o) return;
+  SET_IDS.forEach(id => { if (o[id] != null) $('#'+id).value = o[id]; });
+  if (o.incDump != null) $('#incDump').checked = o.incDump; store.set('mfs_settings', o); });
+cloudGet('mfsj_', arr => { if (!Array.isArray(arr)) { if (journal.length) cloudSet('mfsj_', journal); return; }
+  const ids = new Set(journal.map(j => j.id));
+  journal = [...journal, ...arr.filter(j => !ids.has(j.id))].sort((a,b) => b.ts - a.ts);
+  store.set('mfs_journal', journal);
+  if (!$('#tab-journal').hidden) renderJournal(); });
 const S = () => ({ acct:+$('#acct').value||0, riskPct:+$('#riskPct').value||1, atrMult:+$('#atrMult').value||1.5, t1R:+$('#t1R').value||1.5, t2R:+$('#t2R').value||3 });
 
 /* tabs */
@@ -780,7 +817,7 @@ function logPicks(list){
       entry:p.entry, stop:p.stop, t1:p.t1, t1R:s.t1R, flags:c.flags, res:null });
     added++;
   }
-  store.set('mfs_journal', journal);
+  saveJournal();
   return added;
 }
 function renderJournal(){
@@ -802,9 +839,9 @@ function renderJournal(){
     <td class="num mono">${sgn(j.res?.best)}</td><td class="num mono">${sgn(j.res?.worst)}</td>
     <td>${oc(j.res)}</td>
     <td><a href="${tvUrl(j.sym)}" target="_blank" rel="noopener">chart ↗</a> <button class="small" data-del="${j.id}">✕</button></td></tr>`).join('')
-    : '<tr><td colspan="11" class="sub">Nothing logged yet — run a scan.</td></tr>';
+    : '<tr><td colspan="11" class="sub">Nothing logged yet. Each scan saves its clean setups here so you can see later whether high scores worked. Your own Binance trades live in the bot: use /report, /tilt or /week.</td></tr>';
   document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
-    journal = journal.filter(j => j.id !== b.dataset.del); store.set('mfs_journal', journal); renderJournal(); });
+    journal = journal.filter(j => j.id !== b.dataset.del); saveJournal(); renderJournal(); });
 }
 $('#evalBtn').onclick = async () => {
   const todo = journal.filter(j => !j.res || j.res.outcome === 'open');
@@ -817,7 +854,7 @@ $('#evalBtn').onclick = async () => {
     } catch(e){}
     $('#jstatus').textContent = `Checked ${++n}/${todo.length}`;
   });
-  store.set('mfs_journal', journal); $('#evalBtn').disabled = false;
+  saveJournal(); $('#evalBtn').disabled = false;
   $('#jstatus').textContent = `Updated ${n} entries at ${new Date().toLocaleTimeString()}. Trades younger than 24h stay “open” until then.`;
   renderJournal();
 };
@@ -830,10 +867,10 @@ $('#impBtn').onclick = () => $('#impFile').click();
 $('#impFile').onchange = async e => {
   try { const data = JSON.parse(await e.target.files[0].text());
     const ids = new Set(journal.map(j=>j.id)); journal = [...journal, ...data.filter(j => !ids.has(j.id))].sort((a,b)=>b.ts-a.ts);
-    store.set('mfs_journal', journal); renderJournal(); $('#jstatus').textContent = 'Imported.';
+    saveJournal(); renderJournal(); $('#jstatus').textContent = 'Imported.';
   } catch(err){ $('#jstatus').textContent = 'That file could not be read.'; }
 };
-$('#clrBtn').onclick = () => { if (confirm('Delete the whole journal? Export first if you want a copy.')){ journal = []; store.set('mfs_journal', journal); renderJournal(); } };
+$('#clrBtn').onclick = () => { if (confirm('Delete the whole journal? Export first if you want a copy.')){ journal = []; saveJournal(); renderJournal(); } };
 
 /* scanning */
 async function runScan(){
