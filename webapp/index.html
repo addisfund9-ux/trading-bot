@@ -18,6 +18,7 @@
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
+html,body{overflow-x:hidden;max-width:100%}
 body{margin:0;background:var(--ink);color:var(--fog);font:15px/1.45 Archivo,system-ui,sans-serif;font-variant-numeric:tabular-nums;padding-bottom:84px}
 .mono{font-variant-numeric:tabular-nums}
 button,input{font-family:inherit}
@@ -81,6 +82,13 @@ main{padding:14px 14px 8px;max-width:1180px;margin:0 auto}
 .nums{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .nums div{font-size:15px;font-weight:600}
 .nums small{display:block;font-size:11px;color:var(--mist);font-weight:500;margin-top:1px}
+.emas{display:flex;align-items:center;gap:6px;margin:10px 0 2px;flex-wrap:wrap}
+.ema{font-size:12px;font-weight:700;padding:3px 7px;border-radius:5px;background:var(--ink3);color:var(--mist)}
+.ema.up{color:var(--long);background:rgba(47,211,165,.12)} .ema.dn{color:var(--short);background:rgba(255,107,107,.12)}
+.emas .lbl{font-size:12px;color:var(--mist);margin-right:2px}
+.nums.second{margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+.nums.second div{font-size:14px}
+.more-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:12px;background:var(--ink3);color:var(--fog);border:0;border-radius:9px;padding:10px;font-size:14px;font-weight:600;cursor:pointer}
 .flags{margin-top:9px;display:flex;flex-wrap:wrap;gap:6px}
 .flag{font-size:12px;color:var(--amber);border:1px solid rgba(255,181,71,.35);border-radius:5px;padding:2px 7px}
 .detail{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);cursor:auto}
@@ -137,7 +145,8 @@ label.ctl{display:flex;gap:6px;align-items:center}
 /* ---------- thumb dock ---------- */
 .dock{position:fixed;left:0;right:0;bottom:0;z-index:6;background:rgba(14,21,36,.94);backdrop-filter:blur(8px);border-top:1px solid var(--line);
   padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center}
-.dock .msg{flex:1;font-size:13px;color:var(--mist);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dock .msg{flex:1;font-size:13px;color:var(--mist);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:190px}
+@media (min-width:760px){.dock .msg{padding-right:220px}}
 .dock .msg b{color:var(--fog)}
 #scanBtn{background:var(--fog);color:var(--ink);border:0;border-radius:11px;padding:12px 20px;font-weight:800;font-size:15px;cursor:pointer}
 #scanBtn:disabled{opacity:.6}
@@ -245,8 +254,8 @@ nav{padding-left:max(10px,calc((100vw - 1180px)/2 + 14px));padding-right:max(10p
 </main>
 
 <div class="dock">
-  <div class="msg" id="dockMsg">Ready when you are.</div>
   <button id="scanBtn">Scan</button>
+  <div class="msg" id="dockMsg">Ready when you are.</div>
 </div>
 
 <script>
@@ -640,7 +649,15 @@ function coinHtml(c){
       <div>${sgn(c.oiCh4,1)}<small>OI 4h</small></div>
       <div class="${fpct!=null && Math.abs(fpct)>=0.05?'warn':''}">${fpct==null?'–':fpct.toFixed(3)+'%'}<small>Funding</small></div>
     </div>
+    <div class="emas"><span class="lbl">EMAs</span>${c.trends.map((t,i)=>`<span class="ema ${t>0?'up':t<0?'dn':''}">${TFS[i].tf} ${t>0?'▲':t<0?'▼':'–'}</span>`).join('')}</div>
+    <div class="nums second">
+      <div>${c.taker==null?'–':c.taker.toFixed(2)}<small>Taker buy/sell</small></div>
+      <div>${c.lsr==null?'–':c.lsr.toFixed(2)}<small>Long/short</small></div>
+      <div>${sgn(c.rs4,1)}<small>vs BTC 4h</small></div>
+      <div class="${c.dir*c.ext>3?'warn':''}">${c.ext.toFixed(1)}<small>Stretch (ATR)</small></div>
+    </div>
     ${c.flags.length ? `<div class="flags">${c.flags.map(f=>`<span class="flag">${f}</span>`).join('')}</div>` : ''}
+    <button class="more-btn" data-more="${c.sym}" aria-expanded="${open===c.sym}">${open===c.sym ? 'Hide trade plan ▴' : 'Trade plan &amp; chart ▾'}</button>
     ${open===c.sym ? `<div class="detail">${detailHtml(c)}</div>` : ''}
   </li>`;
 }
