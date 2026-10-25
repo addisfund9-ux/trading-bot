@@ -54,6 +54,7 @@ MAX_LOSSES = int(os.getenv("MAX_LOSSES_PER_COIN", "2"))
 COOLDOWN = float(os.getenv("COOLDOWN_MIN", "15"))            # wait this long after any loss
 MAX_TRADES = int(os.getenv("MAX_TRADES_PER_DAY", "8"))
 LOSS_LIMIT = float(os.getenv("DAILY_LOSS_LIMIT", "5"))       # stop after giving back this much from the day's high
+IDEAS_URL = os.getenv("IDEAS_URL", (WEBAPP_URL.rstrip("/") + "/ideas.json") if WEBAPP_URL else "").strip()
 INBOX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox")
 SCAN_TOP = int(os.getenv("SCAN_TOP", "30"))
 SCAN_MIN_VOL = float(os.getenv("SCAN_MIN_VOL_M", "20"))
@@ -151,6 +152,7 @@ HELP = (
     "your week and the scanner's picks.\n\n"
     "/report — summary + your trades on the chart (yesterday, or /report 2026-10-24)\n"
     "/chart — today's trades drawn on the price chart\n"
+    "/ideas — today's research: new ideas for the bot and your trading\n"
     "/tilt — revenge-trading and overtrading check (today, /tilt 2026-10-24, or /tilt week)\n"
     "/today · /yesterday · /day 2026-10-24 — reviews\n"
     "/week — last 7 days with a chart\n"
@@ -480,6 +482,43 @@ async def flush_job(ctx: ContextTypes.DEFAULT_TYPE):
 
 # ---------------- scheduled ----------------
 
+def fetch_ideas():
+    """Daily research notes published to the scanner site by the morning research task."""
+    if not IDEAS_URL:
+        return None
+    import requests
+    r = requests.get(IDEAS_URL, params={"t": int(datetime.now().timestamp())}, timeout=15)
+    r.raise_for_status()
+    return r.json()
+
+
+def ideas_text(data, today_iso):
+    import html as _h
+    if not data or not data.get("ideas"):
+        return None
+    stale = data.get("date") != today_iso
+    L = [f"<b>💡 Ideas for the bot and your trading</b>" + (f" <i>(from {data.get('date')})</i>" if stale else "")]
+    if data.get("headline"):
+        L.append(_h.escape(data["headline"], quote=False))
+    for i, it in enumerate(data["ideas"][:3], 1):
+        L.append(f"{i}. <b>{_h.escape(it.get('title', ''), quote=False)}</b> · {_h.escape(it.get('effort', ''), quote=False)}\n   {_h.escape(it.get('why', ''), quote=False)}")
+    for w in (data.get("watch") or [])[:2]:
+        L.append(f"⚠️ {_h.escape(w, quote=False)}")
+    L.append("<i>Want one built? Tell Claude in the Claude app, e.g. “build idea 1”.</i>")
+    return "\n".join(L)
+
+
+@owner_only
+async def ideas_cmd(update: Update, ctx):
+    try:
+        data = await asyncio.to_thread(fetch_ideas)
+    except Exception as e:
+        await update.message.reply_text(f"Couldn't load today's ideas ({e}).")
+        return
+    txt = ideas_text(data, today().isoformat())
+    await send(ctx, update.effective_chat.id, txt or "No ideas published yet — the research runs each morning before 08:00.")
+
+
 async def morning_brief(ctx, chat_id):
     y = (today() - timedelta(days=1)).isoformat()
     rows, total, _ = week_data()
@@ -492,6 +531,12 @@ async def morning_brief(ctx, chat_id):
         log.exception("scan failed")
         parts.append(f"Scanner couldn't reach Binance ({e}). Try /scan later.")
     await send(ctx, chat_id, "\n".join(parts), reply_markup=webapp_markup())
+    try:
+        txt = ideas_text(await asyncio.to_thread(fetch_ideas), today().isoformat())
+        if txt:
+            await send(ctx, chat_id, txt)
+    except Exception:
+        log.exception("ideas fetch failed")
 
 
 async def morning_job(ctx: ContextTypes.DEFAULT_TYPE):
@@ -570,7 +615,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     for name, fn in [("help", help_cmd), ("rules", rules_cmd), ("today", today_cmd), ("yesterday", yesterday_cmd),
                      ("day", day_cmd), ("week", week_cmd), ("scan", scan_cmd), ("morning", morning_cmd),
-                     ("report", report_cmd), ("chart", chart_cmd), ("tilt", tilt_cmd),
+                     ("report", report_cmd), ("chart", chart_cmd), ("tilt", tilt_cmd), ("ideas", ideas_cmd),
                      ("undo", undo_cmd), ("export", export_cmd)]:
         app.add_handler(CommandHandler(name, fn))
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, on_image))

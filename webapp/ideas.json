@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-26",
+  "generated_at": "2026-10-25T23:40:00+03:00",
+  "headline": "Your calm trades make money and your revenge trades give it back, so this week's ideas focus on stopping tilt in the moment.",
+  "ideas": [
+    {
+      "title": "Live tilt guard",
+      "why": "Today's report only catches revenge trades after the fact. With a read-only Binance API key, the bot could message you the moment you open a trade within 15 minutes of a loss or raise leverage, which is when it matters.",
+      "effort": "medium",
+      "area": "discipline"
+    },
+    {
+      "title": "One-tap mood check before the first trade",
+      "why": "Anti-tilt journal apps log mood and discipline each session. A /plan button (calm, rushed, angry, tired) would let the bot show which moods your losing days start with.",
+      "effort": "small",
+      "area": "discipline"
+    },
+    {
+      "title": "Discipline streak in the morning brief",
+      "why": "Count the days in a row with no revenge trades and 8 trades or fewer. A streak is easier to protect than a rule is to remember.",
+      "effort": "small",
+      "area": "discipline"
+    }
+  ],
+  "watch": [
+    "Telegram restricted Mini App methods to the Mini App's own domain from 20 July 2026. If the Scanner button ever misbehaves, check that the Mini App domain in @BotFather is datradingbot.netlify.app.",
+    "Binance Futures added USDⓈ-margined TradFi perpetuals (stocks and commodities) in June 2026. If they start appearing among the top movers, the scanner may need a crypto-only filter."
+  ],
+  "sources": [
+    {"title": "Trading Journal – Anti-Tilt (App Store)", "url": "https://apps.apple.com/app/id6758776390"},
+    {"title": "Bot API 10.2 (BotNews)", "url": "https://tgstat.com/channel/@BotNews/120"},
+    {"title": "Binance Futures TradFi USDⓈ perpetuals (DEXTools)", "url": "https://www.dextools.io/news/binance-futures-tradfi-usds-perpetual-contracts-june-2026-ja"}
+  ]
+}
