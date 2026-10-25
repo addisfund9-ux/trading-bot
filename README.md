@@ -59,6 +59,7 @@ You'll get a **Scanner** button next to the message box, and an "Open scanner" b
 |---|---|
 | `/report`, `/report 2026-10-24` | Claude's summary + your trades on the chart + the numbers (yesterday by default) |
 | `/chart`, `/chart 2026-10-24` | Your trades drawn on the price chart (today by default) |
+| `/tilt`, `/tilt 2026-10-24`, `/tilt week` | Revenge-trading and overtrading check, with your day drawn on one line |
 | `/today`, `/yesterday`, `/day 2026-10-24` | Review of one day |
 | `/week` | Last 7 days with a chart |
 | `/scan` | Run the scanner now |
@@ -69,7 +70,8 @@ You'll get a **Scanner** button next to the message box, and an "Open scanner" b
 
 ## Settings (in `.env`)
 - `MORNING_TIME`, `EVENING_REMINDER`: message times (Addis Ababa time).
-- `MAX_HOLD_MIN`, `MAX_LOSSES_PER_COIN`: your two rules.
+- `MAX_HOLD_MIN`, `MAX_LOSSES_PER_COIN`: your two exit rules.
+- `COOLDOWN_MIN`, `MAX_TRADES_PER_DAY`, `DAILY_LOSS_LIMIT`: your anti-tilt rules (wait after a loss, cap trades per day, stop after giving back this much from the day's high).
 - `SCAN_TOP`, `SCAN_MIN_VOL_M`: how many movers to scan, and the minimum 24h volume in $M.
 
 After you change `.env`, restart the bot by closing the black window and opening `start.bat` again.

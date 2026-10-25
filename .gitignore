@@ -12,3 +12,4 @@ __pycache__/
 *.pyc
 wheels/
 bot.log
+inbox/

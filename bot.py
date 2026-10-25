@@ -24,7 +24,10 @@ import importer
 import review
 import scanner
 import store
+import tilt
 import tradechart
+import json
+import shutil
 
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO,
@@ -48,6 +51,10 @@ EVENING = os.getenv("EVENING_REMINDER", "21:00")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip()
 MAX_HOLD = float(os.getenv("MAX_HOLD_MIN", "10"))
 MAX_LOSSES = int(os.getenv("MAX_LOSSES_PER_COIN", "2"))
+COOLDOWN = float(os.getenv("COOLDOWN_MIN", "15"))            # wait this long after any loss
+MAX_TRADES = int(os.getenv("MAX_TRADES_PER_DAY", "8"))
+LOSS_LIMIT = float(os.getenv("DAILY_LOSS_LIMIT", "5"))       # stop after giving back this much from the day's high
+INBOX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox")
 SCAN_TOP = int(os.getenv("SCAN_TOP", "30"))
 SCAN_MIN_VOL = float(os.getenv("SCAN_MIN_VOL_M", "20"))
 ALBUM_WAIT = 6  # seconds to wait for the rest of a batch of screenshots
@@ -90,6 +97,7 @@ def schedule(app: Application, chat_id: int):
     for j in jq.jobs():
         j.schedule_removal()
     jq.run_daily(morning_job, parse_hhmm(MORNING), chat_id=chat_id, name="morning")
+    jq.run_repeating(inbox_job, interval=60, first=10, chat_id=chat_id, name="inbox")
     if EVENING:
         jq.run_daily(evening_job, parse_hhmm(EVENING), chat_id=chat_id, name="evening")
     log.info("Scheduled morning brief at %s and reminder at %s (%s)", MORNING, EVENING or "off", TZ)
@@ -143,6 +151,7 @@ HELP = (
     "your week and the scanner's picks.\n\n"
     "/report — summary + your trades on the chart (yesterday, or /report 2026-10-24)\n"
     "/chart — today's trades drawn on the price chart\n"
+    "/tilt — revenge-trading and overtrading check (today, /tilt 2026-10-24, or /tilt week)\n"
     "/today · /yesterday · /day 2026-10-24 — reviews\n"
     "/week — last 7 days with a chart\n"
     "/scan — run the scanner now\n"
@@ -178,8 +187,13 @@ async def help_cmd(update: Update, ctx):
 async def rules_cmd(update: Update, ctx):
     await update.message.reply_text(
         f"<b>Your rules</b>\n1. Close any losing trade still open after {MAX_HOLD:.0f} minutes.\n"
-        f"2. Stop trading a coin after {MAX_LOSSES} losses in a row on it.\n\n"
-        "Change them in the .env file (MAX_HOLD_MIN, MAX_LOSSES_PER_COIN).", parse_mode=ParseMode.HTML)
+        f"2. Stop trading a coin after {MAX_LOSSES} losses in a row on it.\n"
+        f"3. After any loss, wait {COOLDOWN:g} minutes before the next trade.\n"
+        f"4. No more than {MAX_TRADES} trades a day.\n"
+        f"5. Stop for the day after giving back {LOSS_LIMIT:g} USDT from the day's high.\n"
+        "6. Never raise leverage after a loss.\n\n"
+        "Change them in the .env file (MAX_HOLD_MIN, MAX_LOSSES_PER_COIN, COOLDOWN_MIN, MAX_TRADES_PER_DAY, "
+        "DAILY_LOSS_LIMIT).", parse_mode=ParseMode.HTML)
 
 
 @owner_only
@@ -210,6 +224,45 @@ async def week_cmd(update: Update, ctx):
                              parse_mode=ParseMode.HTML)
 
 
+def tilt_for(pos):
+    return tilt.analyse(pos, COOLDOWN, MAX_TRADES, LOSS_LIMIT)
+
+
+async def send_tilt(ctx, chat_id, day, pos, with_chart=True):
+    a = tilt_for(pos)
+    if with_chart:
+        try:
+            png = await asyncio.to_thread(tilt.chart, day, a)
+            if png:
+                await ctx.bot.send_photo(chat_id, png, caption=f"Your day on one line — {day}")
+        except Exception:
+            log.exception("tilt chart failed")
+    await send(ctx, chat_id, tilt.report(day, a))
+
+
+@owner_only
+async def tilt_cmd(update: Update, ctx):
+    chat = update.effective_chat.id
+    if ctx.args and ctx.args[0].lower().startswith("week"):
+        end = today()
+        days = [(end - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
+        data = [(d, tilt_for(store.positions_for(con, d))) for d in days]
+        await send(ctx, chat, tilt.week_report(data))
+        return
+    try:
+        d = date.fromisoformat(ctx.args[0]).isoformat() if ctx.args else today().isoformat()
+    except ValueError:
+        await update.message.reply_text("Use it like: /tilt, /tilt 2026-10-24 or /tilt week")
+        return
+    pos = store.positions_for(con, d)
+    if not pos and not ctx.args:
+        d = (today() - timedelta(days=1)).isoformat(); pos = store.positions_for(con, d)
+    if not pos:
+        await update.message.reply_text(f"No trades logged for {d}.")
+        return
+    await send_tilt(ctx, chat, d, pos)
+
+
 async def send_report(ctx, chat_id, day: str, header: str = ""):
     """Claude's written summary, the trade charts, then the numbers. Used by /report and the morning brief."""
     pos = store.positions_for(con, day)
@@ -232,6 +285,8 @@ async def send_report(ctx, chat_id, day: str, header: str = ""):
         for sym, png in charts:
             await ctx.bot.send_photo(chat_id, png, caption=f"{sym.replace('USDT', '')} — your trades on {day}")
     await send(ctx, chat_id, review_for(day))
+    if pos:
+        await send_tilt(ctx, chat_id, day, pos, with_chart=True)
 
 
 @owner_only
@@ -354,6 +409,9 @@ async def on_export(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await m.reply_text(head, parse_mode=ParseMode.HTML)
     for d in sorted(days)[-2:]:
         await send(ctx, m.chat_id, review_for(d))
+    if days:
+        last_day = max(days)
+        await send_tilt(ctx, m.chat_id, last_day, store.positions_for(con, last_day), with_chart=False)
 
 
 # ---------------- screenshots ----------------
@@ -415,6 +473,9 @@ async def flush_job(ctx: ContextTypes.DEFAULT_TYPE):
     await status.edit_text(head, parse_mode=ParseMode.HTML)
     for d in sorted(days_touched)[-3:]:
         await send(ctx, chat, review_for(d))
+    if days_touched:
+        last_day = max(days_touched)
+        await send_tilt(ctx, chat, last_day, store.positions_for(con, last_day), with_chart=False)
 
 
 # ---------------- scheduled ----------------
@@ -446,6 +507,51 @@ async def evening_job(ctx: ContextTypes.DEFAULT_TYPE):
                                                 "and I'll have your review ready for the morning.")
 
 
+async def inbox_job(ctx: ContextTypes.DEFAULT_TYPE):
+    """Trades Claude read from your screenshots arrive as JSON files in the inbox folder. Import them, then
+    move each file to inbox/done so it is never imported twice."""
+    os.makedirs(os.path.join(INBOX, "done"), exist_ok=True)
+    files = sorted(f for f in os.listdir(INBOX) if f.lower().endswith(".json"))
+    for name in files:
+        path = os.path.join(INBOX, name)
+        try:
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+            items = data.get("positions", []) if isinstance(data, dict) else data
+            daily = data.get("daily", []) if isinstance(data, dict) else []
+            batch = "inbox-" + uuid.uuid4().hex[:6]
+            counts, days = {"new": 0, "updated": 0, "dup": 0}, set()
+            for p in items:
+                p.setdefault("sort_ts", p.get("opened_at") or p.get("closed_at"))
+                p.setdefault("day", (p.get("sort_ts") or "")[:10])
+                if not p["day"]:
+                    continue
+                counts[store.upsert_position(con, p, batch)] += 1
+                days.add(p["day"])
+            for d in daily:
+                store.upsert_daily(con, d["date"], float(d["pnl"]), batch)
+            for d in (data.get("clear_daily", []) if isinstance(data, dict) else []):
+                con.execute("DELETE FROM daily WHERE day=?", (d,))   # an outdated calendar total for that day
+            con.commit()
+            store.set_setting(con, "last_batch", batch)
+            shutil.move(path, os.path.join(INBOX, "done", name))
+            log.info("Inbox %s: %s", name, counts)
+            await ctx.bot.send_message(ctx.job.chat_id,
+                f"📥 Claude logged <b>{counts['new']}</b> trade(s) from your screenshots"
+                + (f", skipped {counts['dup']} already logged" if counts["dup"] else "") + ".",
+                parse_mode=ParseMode.HTML)
+            for d in sorted(days)[-2:]:
+                await send(ctx, ctx.job.chat_id, review_for(d))
+            if days:
+                await send_tilt(ctx, ctx.job.chat_id, max(days), store.positions_for(con, max(days)))
+        except Exception:
+            log.exception("inbox import failed for %s", name)
+            try:
+                shutil.move(path, os.path.join(INBOX, "done", name + ".failed"))
+            except Exception:
+                pass
+
+
 async def post_init(app: Application):
     oid = owner_id()
     if oid:
@@ -464,7 +570,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     for name, fn in [("help", help_cmd), ("rules", rules_cmd), ("today", today_cmd), ("yesterday", yesterday_cmd),
                      ("day", day_cmd), ("week", week_cmd), ("scan", scan_cmd), ("morning", morning_cmd),
-                     ("report", report_cmd), ("chart", chart_cmd),
+                     ("report", report_cmd), ("chart", chart_cmd), ("tilt", tilt_cmd),
                      ("undo", undo_cmd), ("export", export_cmd)]:
         app.add_handler(CommandHandler(name, fn))
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, on_image))
