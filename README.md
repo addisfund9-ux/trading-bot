@@ -49,7 +49,7 @@ You'll get a **Scanner** button next to the message box, and an "Open scanner" b
 ---
 
 ## Daily use
-- **After trading, without a Claude key:** in Binance, go to Orders → Futures → **Trade History** (or Position History), tap the **export/download** icon, choose the date range, and export as CSV or Excel. Send the file to the bot with 📎 → File. Overlapping date ranges are fine; trades already logged are skipped, even ones that came from screenshots.
+- **After trading, without a Claude key:** in Binance, go to Orders → Futures → **Trade History** (or Position History), tap the **export/download** icon, choose the date range, and export as CSV or Excel. Send the file to the bot with 📎 → File. A **.zip** from Binance works as-is, so there's no need to unzip it. Overlapping date ranges are fine; trades already logged are skipped, even ones that came from screenshots.
 - **After trading, with a Claude key:** you can send screenshots instead. In Binance, go to Futures → Orders → **Position History**. Take screenshots while you scroll through the day's trades and send them all to the bot at once. Overlapping screenshots are fine; duplicates are skipped. You can also add the **PNL Analysis** calendar screenshot so the bot can cross-check its totals against Binance's numbers.
   - Send them as **files** (📎 → File) rather than photos, so the small numbers stay sharp.
 - **Morning:** read the brief at 08:00 and open the scanner.

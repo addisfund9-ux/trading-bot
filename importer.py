@@ -206,6 +206,50 @@ def parse_trades(header, rows, tz, utc):
     return out, len(open_pos)
 
 
+TABLE_EXT = (".csv", ".xlsx", ".xlsm", ".txt", ".tsv")
+
+
+def unpack(data: bytes, filename: str):
+    """Binance often sends exports as a .zip. Return [(name, bytes)] of the table files inside it
+    (or the file itself if it isn't a zip)."""
+    import zipfile
+    if data[:2] != b"PK" or filename.lower().endswith((".xlsx", ".xlsm")):
+        return [(filename, data)]
+    try:
+        z = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile:
+        return [(filename, data)]
+    out = []
+    for info in z.infolist():
+        name = info.filename
+        base = name.rsplit("/", 1)[-1]
+        if info.is_dir() or base.startswith((".", "__MACOSX")) or "__MACOSX" in name:
+            continue
+        if base.lower().endswith(TABLE_EXT):
+            out.append((base, z.read(info)))
+        elif base.lower().endswith(".zip"):          # a zip inside the zip
+            out.extend(unpack(z.read(info), base))
+    return out
+
+
+def parse_any(data: bytes, filename: str, tz):
+    """Parse a CSV/Excel file or a zip of them. Returns (kinds, positions, notes, files_read)."""
+    kinds, positions, notes, files = set(), [], [], []
+    for name, blob in unpack(data, filename):
+        try:
+            kind, pos, note = parse_file(blob, name, tz)
+        except Exception as e:                        # one bad file shouldn't stop the others
+            notes.append(f"{name}: couldn't read ({e})")
+            continue
+        files.append(name)
+        if kind:
+            kinds.add(kind)
+            positions.extend(pos)
+        if note:
+            notes.append(f"{name}: {note}" if len(files) > 1 or kind is None else note)
+    return kinds, positions, notes, files
+
+
 def parse_file(data: bytes, filename: str, tz):
     """Returns (kind, positions, note). kind is 'positions', 'trades' or None if not recognised."""
     header, raw_header, rows = read_rows(data, filename)

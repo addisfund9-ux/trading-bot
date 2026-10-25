@@ -127,7 +127,7 @@ def week_data(n=7):
 
 EXPORT_HOWTO = (
     "In Binance: <b>Orders → Futures → Trade History</b> (or Position History) → tap the "
-    "<b>export/download</b> icon → pick the date range → export as CSV or Excel. Then send the file here with 📎 → File."
+    "<b>export/download</b> icon → pick the date range → export as CSV or Excel. Then send the file here with 📎 → File (a .zip from Binance is fine)."
 )
 
 HELP = (
@@ -319,16 +319,23 @@ async def on_export(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     name = m.document.file_name or "export.csv"
     f = await m.document.get_file()
     data = bytes(await f.download_as_bytearray())
+    log.info("Received file %s (%d bytes)", name, len(data))
     try:
-        kind, positions, note = await asyncio.to_thread(importer.parse_file, data, name, TZ)
+        kinds, positions, notes, files = await asyncio.to_thread(importer.parse_any, data, name, TZ)
     except Exception as e:
         log.exception("import failed")
-        await m.reply_text(f"I couldn't open that file ({e}). Send the CSV or Excel export from Binance.")
+        await m.reply_text(f"I couldn't open that file ({e}). Send the CSV, Excel or zip export from Binance.")
         return
-    if kind is None:
+    note = "\n".join(notes)
+    if not files:
+        await m.reply_text("I couldn't find a CSV or Excel file in that. Send the zip or CSV that Binance gave you.")
+        return
+    if not kinds:
+        log.warning("Unrecognised export %s: %s", files, note)
         await m.reply_text("I don't recognise this file's columns, so nothing was logged.\n" + note +
                            "\n\nSend this message to Claude and the importer can be adjusted.")
         return
+    kind = "positions" if kinds == {"positions"} else "trades" if kinds == {"trades"} else "mixed"
     batch = uuid.uuid4().hex[:8]
     counts = {"new": 0, "updated": 0, "dup": 0}
     days = set()
@@ -337,7 +344,8 @@ async def on_export(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         days.add(p["day"])
     con.commit()
     store.set_setting(con, "last_batch", batch)
-    label = "Position History" if kind == "positions" else "Trade History"
+    label = {"positions": "Position History", "trades": "Trade History"}.get(kind, "Binance")
+    log.info("Imported %s: %s", files, counts)
     head = (f"✅ {label} file: logged <b>{counts['new']}</b> new trade(s)"
             + (f", updated {counts['updated']}" if counts["updated"] else "")
             + (f", skipped {counts['dup']} already logged" if counts["dup"] else "") + "."
@@ -459,10 +467,9 @@ def main():
                      ("report", report_cmd), ("chart", chart_cmd),
                      ("undo", undo_cmd), ("export", export_cmd)]:
         app.add_handler(CommandHandler(name, fn))
-    export_files = (filters.Document.FileExtension("csv") | filters.Document.FileExtension("xlsx")
-                    | filters.Document.FileExtension("CSV") | filters.Document.FileExtension("XLSX"))
-    app.add_handler(MessageHandler(export_files, on_export))
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, on_image))
+    # every other file (csv, xlsx, zip, txt, or a file with an odd/missing extension) goes to the importer
+    app.add_handler(MessageHandler(filters.Document.ALL, on_export))
     log.info("Bot running%s. Press Ctrl+C to stop.",
              "" if claude else " without a Claude key (export files + rule-based summaries)")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
