@@ -597,7 +597,24 @@ async def inbox_job(ctx: ContextTypes.DEFAULT_TYPE):
                 pass
 
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+def _code_stamp():
+    return {f: os.path.getmtime(os.path.join(HERE, f)) for f in os.listdir(HERE) if f.endswith(".py")}
+_STAMP = _code_stamp()
+
+
+async def reload_job(ctx: ContextTypes.DEFAULT_TYPE):
+    """When Claude updates the bot's code, restart so the new version runs (start.bat starts it again)."""
+    try:
+        if _code_stamp() != _STAMP:
+            log.info("Code updated — restarting to load the new version.")
+            os._exit(0)
+    except Exception:
+        log.exception("reload check failed")
+
+
 async def post_init(app: Application):
+    app.job_queue.run_repeating(reload_job, interval=60, first=60, name="reload")
     oid = owner_id()
     if oid:
         schedule(app, oid)

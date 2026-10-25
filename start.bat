@@ -6,5 +6,5 @@ call .venv\Scripts\activate.bat
 python bot.py
 echo.
 echo The bot stopped. Restarting in 10 seconds (close this window to stop it)...
-timeout /t 10 >nul
+timeout /t 5 >nul
 goto loop
