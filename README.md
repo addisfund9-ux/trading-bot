@@ -1,9 +1,9 @@
 # Trading Bot: setup on your Windows PC
 
 Your bot does three things:
-1. **Logs your trades.** You send it your Binance Position History screenshots, and it reads them and saves every trade.
+1. **Logs your trades.** You send it your Binance export file (CSV or Excel), or screenshots if you've added a Claude key, and it saves every trade.
 2. **Reviews your day.** It replies with your P&L, win rate, best and worst trades, and checks your two rules.
-3. **Sends a morning brief at 08:00.** It starts with Claude's written summary of yesterday, then your trades drawn on the price chart, your 7-day total and the scanner's clean setups.
+3. **Sends a morning brief at 08:00.** It starts with a written summary of yesterday (by Claude if you have a key, otherwise by built-in rules), then your trades drawn on the price chart, your 7-day total and the scanner's clean setups.
 
 The bot runs on your PC, so it's only online while the PC is on and awake. The scanner page is hosted on Netlify from this GitHub repo.
 
@@ -20,16 +20,16 @@ On the first install screen, **tick "Add python.exe to PATH"**, then click Insta
 2. Send `/newbot`, choose a name (for example "Dagi Trading") and a username ending in `bot`.
 3. BotFather replies with a **token** like `7123456789:AAH...`. Copy it.
 
-## 3. Get a Claude API key
-1. Go to https://console.anthropic.com, sign in and add a few dollars of credit under **Billing**.
-2. Open **API Keys** → **Create Key**, then copy it (it starts with `sk-ant-`).
+## 3. Optional: a Claude API key
+The bot works without one. Without a key, you log trades by sending Binance's **export file** (CSV or Excel), and the morning summary is written by built-in rules.
 
-Reading screenshots costs a small amount per image, roughly a few cents for a day's screenshots.
+With a key, the bot can also read **screenshots**, and Claude writes the morning summary. To get one, go to https://console.anthropic.com → **Billing** (add a few dollars) → **API Keys** → **Create Key**, and paste it after `ANTHROPIC_API_KEY=` in `.env`. Reading screenshots costs roughly a few cents a day.
 
 ## 4. Install and start
 1. Unzip this folder somewhere permanent, for example `C:\TradingBot`.
 2. Double-click **install.bat** and wait for it to finish.
-3. Open the new **.env** file with Notepad. Paste your Telegram token after `TELEGRAM_BOT_TOKEN=` and your Claude key after `ANTHROPIC_API_KEY=`, then save.
+3. Open the new **.env** file with Notepad. Paste your Telegram token after `TELEGRAM_BOT_TOKEN=` (and your Claude key after `ANTHROPIC_API_KEY=` if you have one), then save.
+   - **Slow connection?** If `install.bat` keeps timing out, run **install_offline.bat** instead. It installs from the `wheels` folder without downloading anything, if that folder is present.
 4. Double-click **start.bat**. A black window opens and says "Bot running". Keep it open.
 5. In Telegram, open your new bot and send **/start**. You are now its only owner.
 
@@ -49,7 +49,8 @@ You'll get a **Scanner** button next to the message box, and an "Open scanner" b
 ---
 
 ## Daily use
-- **After trading:** in Binance, go to Futures → Orders → **Position History**. Take screenshots while you scroll through the day's trades and send them all to the bot at once. Overlapping screenshots are fine; duplicates are skipped. You can also add the **PNL Analysis** calendar screenshot so the bot can cross-check its totals against Binance's numbers.
+- **After trading, without a Claude key:** in Binance, go to Orders → Futures → **Trade History** (or Position History), tap the **export/download** icon, choose the date range, and export as CSV or Excel. Send the file to the bot with 📎 → File. Overlapping date ranges are fine; trades already logged are skipped, even ones that came from screenshots.
+- **After trading, with a Claude key:** you can send screenshots instead. In Binance, go to Futures → Orders → **Position History**. Take screenshots while you scroll through the day's trades and send them all to the bot at once. Overlapping screenshots are fine; duplicates are skipped. You can also add the **PNL Analysis** calendar screenshot so the bot can cross-check its totals against Binance's numbers.
   - Send them as **files** (📎 → File) rather than photos, so the small numbers stay sharp.
 - **Morning:** read the brief at 08:00 and open the scanner.
 
@@ -80,6 +81,7 @@ After you change `.env`, restart the bot by closing the black window and opening
 ## If something goes wrong
 - **The black window shows an error mentioning `TELEGRAM_BOT_TOKEN`:** the token in `.env` is missing or mistyped.
 - **"screenshot(s) couldn't be read":** check the Claude key and the credit balance at console.anthropic.com.
+- **"I don't recognise this file's columns":** send that message to Claude so the importer can be adjusted to Binance's exact export format.
 - **The scanner says it can't reach Binance:** check your internet connection, since the scanner runs from your PC.
 - **A number was read wrong:** send `/undo`, then send the screenshots again as files.
 - **A trade isn't drawn on the chart:** its open or close time was cut off in the screenshot. It still counts in the P&L. Send a screenshot that shows the full card and it fills in.

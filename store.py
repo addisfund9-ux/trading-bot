@@ -49,10 +49,40 @@ def set_setting(con, k, v):
     con.commit()
 
 
+def _secs(ts):
+    from datetime import datetime
+    try:
+        return datetime.strptime(ts[:19], "%Y-%m-%d %H:%M:%S").timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def _fuzzy_match(con, p):
+    """The same position logged from a different source (screenshot vs export) has slightly different averages.
+    Match it by coin + side + day, and either an open/close time within 90 s, or the same size with prices
+    within 0.3%."""
+    if not p.get("day"):
+        return None
+    rows = con.execute("SELECT * FROM positions WHERE symbol=? AND side=? AND day=?",
+                       (p["symbol"], p["side"], p["day"])).fetchall()
+    for r in rows:
+        for f in ("opened_at", "closed_at"):
+            a, b = _secs(p.get(f)), _secs(r[f])
+            if a is not None and b is not None and abs(a - b) <= 90:
+                return r
+        if r["qty"] and abs(r["qty"] - p["qty"]) <= 0.001 * r["qty"] \
+                and abs(r["entry"] - p["entry"]) <= 0.003 * r["entry"] \
+                and abs(r["close"] - p["close"]) <= 0.003 * max(r["close"], 1e-12):
+            return r
+    return None
+
+
 def upsert_position(con, p, batch):
     """Insert a position, or fill in times on a copy we already have. Returns 'new', 'updated' or 'dup'."""
     key = (p["symbol"], p["side"], p["entry"], p["close"], p["qty"])
     old = con.execute("SELECT * FROM positions WHERE symbol=? AND side=? AND entry=? AND close=? AND qty=?", key).fetchone()
+    if old is None:
+        old = _fuzzy_match(con, p)
     if old is None:
         con.execute(
             """INSERT INTO positions(day,day_guessed,symbol,side,leverage,pnl,roi,entry,close,qty,opened_at,closed_at,sort_ts,batch)

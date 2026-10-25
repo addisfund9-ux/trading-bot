@@ -20,6 +20,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 import coach
 import extract
+import importer
 import review
 import scanner
 import store
@@ -44,7 +45,10 @@ SCAN_MIN_VOL = float(os.getenv("SCAN_MIN_VOL_M", "20"))
 ALBUM_WAIT = 6  # seconds to wait for the rest of a batch of screenshots
 
 con = store.connect()
-claude = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY
+# The Claude key is optional: with it, screenshots are read and summaries are written by Claude;
+# without it, trades come from Binance export files and summaries are rule-based.
+CLAUDE_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
+claude = anthropic.Anthropic(api_key=CLAUDE_KEY) if CLAUDE_KEY else None
 
 
 def today():
@@ -113,20 +117,29 @@ def week_data(n=7):
 
 # ---------------- commands ----------------
 
+EXPORT_HOWTO = (
+    "In Binance: <b>Orders → Futures → Trade History</b> (or Position History) → tap the "
+    "<b>export/download</b> icon → pick the date range → export as CSV or Excel. Then send the file here with 📎 → File."
+)
+
 HELP = (
     "<b>How to use me</b>\n"
-    "• After trading, send screenshots of Binance → Futures → <b>Position History</b> (scroll and send all of today's), "
-    "plus the <b>PNL Analysis</b> calendar if you like. Send several at once; overlaps are fine.\n"
-    "• Tip: send them as <i>files</i> (📎 → File) so the small numbers stay sharp.\n"
-    f"• Every morning at {MORNING} you get Claude's summary of yesterday, your trades drawn on the chart, "
+    + ("• After trading, send screenshots of Binance → Futures → <b>Position History</b> (scroll and send all of today's), "
+       "plus the <b>PNL Analysis</b> calendar if you like. Send several at once; overlaps are fine. "
+       "Tip: send them as <i>files</i> so the small numbers stay sharp.\n"
+       "• Or send Binance's export file (CSV/Excel) — exact and free.\n"
+       if CLAUDE_KEY else
+       "• After trading, send your Binance <b>export file</b>. " + EXPORT_HOWTO + "\n"
+       "• Overlapping files are fine; trades already logged are skipped.\n")
+    + f"• Every morning at {MORNING} you get a summary of yesterday, your trades drawn on the chart, "
     "your week and the scanner's picks.\n\n"
-    "/report — Claude's summary + your trades on the chart (yesterday, or /report 2026-10-24)\n"
+    "/report — summary + your trades on the chart (yesterday, or /report 2026-10-24)\n"
     "/chart — today's trades drawn on the price chart\n"
     "/today · /yesterday · /day 2026-10-24 — reviews\n"
     "/week — last 7 days with a chart\n"
     "/scan — run the scanner now\n"
     "/morning — send the morning brief now\n"
-    "/undo — remove the last batch of screenshots\n"
+    "/undo — remove the last batch you sent\n"
     "/export — all trades as CSV\n"
     "/rules — your trading rules"
 )
@@ -277,7 +290,7 @@ async def undo_cmd(update: Update, ctx):
         return
     n = store.undo_batch(con, batch)
     store.set_setting(con, "last_batch", "")
-    await update.message.reply_text(f"Removed {n} entries from the last batch of screenshots.")
+    await update.message.reply_text(f"Removed {n} entries from the last batch you sent.")
 
 
 @owner_only
@@ -290,11 +303,52 @@ async def export_cmd(update: Update, ctx):
                                 filename=f"trades-{today().isoformat()}.csv", caption=f"{len(pos)} trades")
 
 
+# ---------------- export files ----------------
+
+@owner_only
+async def on_export(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    m = update.message
+    name = m.document.file_name or "export.csv"
+    f = await m.document.get_file()
+    data = bytes(await f.download_as_bytearray())
+    try:
+        kind, positions, note = await asyncio.to_thread(importer.parse_file, data, name, TZ)
+    except Exception as e:
+        log.exception("import failed")
+        await m.reply_text(f"I couldn't open that file ({e}). Send the CSV or Excel export from Binance.")
+        return
+    if kind is None:
+        await m.reply_text("I don't recognise this file's columns, so nothing was logged.\n" + note +
+                           "\n\nSend this message to Claude and the importer can be adjusted.")
+        return
+    batch = uuid.uuid4().hex[:8]
+    counts = {"new": 0, "updated": 0, "dup": 0}
+    days = set()
+    for p in positions:
+        counts[store.upsert_position(con, p, batch)] += 1
+        days.add(p["day"])
+    con.commit()
+    store.set_setting(con, "last_batch", batch)
+    label = "Position History" if kind == "positions" else "Trade History"
+    head = (f"✅ {label} file: logged <b>{counts['new']}</b> new trade(s)"
+            + (f", updated {counts['updated']}" if counts["updated"] else "")
+            + (f", skipped {counts['dup']} already logged" if counts["dup"] else "") + "."
+            + (f"\n{note}" if note else "")
+            + (f"\nDays covered: {min(days)} → {max(days)}" if days else ""))
+    await m.reply_text(head, parse_mode=ParseMode.HTML)
+    for d in sorted(days)[-2:]:
+        await send(ctx, m.chat_id, review_for(d))
+
+
 # ---------------- screenshots ----------------
 
 @owner_only
 async def on_image(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     m = update.message
+    if claude is None:
+        await m.reply_text("Reading screenshots needs a Claude API key, which isn't set up. "
+                           "Send Binance's export file instead.\n\n" + EXPORT_HOWTO.replace("<b>", "").replace("</b>", ""))
+        return
     f = await (m.photo[-1].get_file() if m.photo else m.document.get_file())
     data = bytes(await f.download_as_bytearray())
     pending = ctx.chat_data.setdefault("pending", [])
@@ -371,7 +425,8 @@ async def evening_job(ctx: ContextTypes.DEFAULT_TYPE):
     d = today().isoformat()
     if store.positions_for(con, d) or store.daily_for(con, d, d):
         return
-    await ctx.bot.send_message(ctx.job.chat_id, "🌙 Done trading for today? Send your Position History screenshots "
+    what = "Position History screenshots" if claude else "Binance Trade History export file"
+    await ctx.bot.send_message(ctx.job.chat_id, f"🌙 Done trading for today? Send your {what} "
                                                 "and I'll have your review ready for the morning.")
 
 
@@ -391,8 +446,12 @@ def main():
                      ("report", report_cmd), ("chart", chart_cmd),
                      ("undo", undo_cmd), ("export", export_cmd)]:
         app.add_handler(CommandHandler(name, fn))
+    export_files = (filters.Document.FileExtension("csv") | filters.Document.FileExtension("xlsx")
+                    | filters.Document.FileExtension("CSV") | filters.Document.FileExtension("XLSX"))
+    app.add_handler(MessageHandler(export_files, on_export))
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, on_image))
-    log.info("Bot running. Press Ctrl+C to stop.")
+    log.info("Bot running%s. Press Ctrl+C to stop.",
+             "" if claude else " without a Claude key (export files + rule-based summaries)")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
