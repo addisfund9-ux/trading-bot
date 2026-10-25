@@ -1,0 +1,757 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Morning Futures Scanner</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0e11; --panel:#14181d; --panel2:#1b2027; --line:#262c35;
+  --text:#e6e8eb; --muted:#8a93a0; --long:#16c784; --short:#ea3943;
+  --warn:#f0b90b; --accent:#f0b90b; --info:#5aa9ff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Inter,system-ui,sans-serif}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+header{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--line);background:var(--panel)}
+h1{font-size:18px;margin:0}
+h1 span{color:var(--accent)}
+.sub{color:var(--muted);font-size:12px}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+label.ctl{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px}
+input[type=number]{width:72px;background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:6px 8px;border-radius:6px}
+button{background:var(--panel2);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-family:inherit}
+button:hover{border-color:var(--muted)}
+button.primary{background:var(--accent);color:#111;border-color:var(--accent)}
+button.small{padding:4px 10px;font-size:12px}
+button:disabled{opacity:.5;cursor:default}
+nav{display:flex;gap:4px;padding:0 24px;border-bottom:1px solid var(--line);background:var(--panel)}
+nav button{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;color:var(--muted);padding:10px 14px}
+nav button.on{color:var(--text);border-bottom-color:var(--accent)}
+main{padding:18px 24px;max-width:1600px;margin:0 auto}
+.status{color:var(--muted);margin-bottom:14px;min-height:20px}
+.status.err{color:var(--short)}
+.leaders{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px;margin-bottom:16px}
+.lead{display:flex;flex-wrap:wrap;gap:16px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
+.lead .big{font-size:18px;font-weight:700}
+.pill{display:inline-block;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.3px;margin:1px 2px 1px 0}
+.p-long{background:rgba(22,199,132,.15);color:var(--long)}
+.p-short{background:rgba(234,57,67,.15);color:var(--short)}
+.p-mixed{background:rgba(138,147,160,.15);color:var(--muted)}
+.p-warn{background:rgba(240,185,11,.15);color:var(--warn)}
+.p-info{background:rgba(90,169,255,.15);color:var(--info)}
+.tfs{display:flex;gap:4px}
+.tf{font-size:11px;padding:2px 5px;border-radius:4px;border:1px solid var(--line)}
+.tf.up{color:var(--long);border-color:rgba(22,199,132,.4)}
+.tf.dn{color:var(--short);border-color:rgba(234,57,67,.4)}
+.tf.fl{color:var(--muted)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table{width:100%;border-collapse:collapse}
+#tbl{min-width:1280px}
+th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{background:var(--panel);color:var(--muted);font-weight:500;font-size:12px;cursor:pointer;user-select:none}
+tbody tr.row{cursor:pointer}
+tbody tr.row:hover td{background:var(--panel)}
+tr.dim td{opacity:.45}
+tr.detail td{background:var(--panel);white-space:normal;padding:14px 16px}
+.dwrap{position:sticky;left:16px;width:min(100%, calc(100vw - 96px))}
+td.num,th.num{text-align:right}
+.score{display:flex;align-items:center;gap:8px}
+.bar{width:54px;height:6px;background:var(--panel2);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.up{color:var(--long)} .dn{color:var(--short)} .warn{color:var(--warn)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:16px 0 10px}
+.toolbar .sub{margin-right:auto}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.box h4{margin:0 0 8px;font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;font-size:13px}
+.kv span:nth-child(odd){color:var(--muted)}
+.charts{display:grid;grid-template-columns:repeat(auto-fill,minmax(520px,1fr));gap:14px;margin-top:10px}
+.chart{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.chart .hd{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line)}
+.chart .tv{height:420px}
+.legend{color:var(--muted);font-size:12px;margin-top:22px;line-height:1.7}
+.legend b{color:var(--text)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.stat .v{font-size:22px;font-weight:700}
+#jtbl{min-width:1000px}
+[hidden]{display:none!important}
+@media (max-width:640px){header,main,nav{padding-left:16px;padding-right:16px}.charts{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Morning <span>Futures</span> Scanner <span class="sub">v3 · Telegram</span></h1>
+    <div class="sub">Binance USDT-M perps · EMA 9/21 (15m) · 20/50 (1h) · 50/200 (4h) · volume · OI · funding · taker flow · vs BTC</div>
+  </div>
+  <div class="controls">
+    <label class="ctl">Top movers <input id="nMovers" type="number" value="30" min="5" max="80"></label>
+    <label class="ctl">Min 24h vol $M <input id="minVol" type="number" value="20" min="0"></label>
+    <label class="ctl"><input id="incDump" type="checkbox" checked> losers too</label>
+    <label class="ctl"><input id="auto" type="checkbox"> auto-rescan every <input id="autoMin" type="number" value="15" min="5" style="width:52px"> min</label>
+    <button class="primary" id="scanBtn">Scan market</button>
+  </div>
+</header>
+<nav>
+  <button class="on" data-tab="scan">Scanner</button>
+  <button data-tab="journal">Journal</button>
+  <button data-tab="settings">Risk settings</button>
+</nav>
+
+<main id="tab-scan">
+  <div class="status" id="status">Press “Scan market” to run this morning’s scan.</div>
+  <div class="leaders" id="leaders"></div>
+  <div class="tablewrap"><table id="tbl" hidden>
+    <thead><tr>
+      <th>✓</th><th data-k="sym">Coin</th><th data-k="score">Score</th><th data-k="dir">Setup</th>
+      <th>EMA 15m · 1h · 4h</th><th>4h chart (10 days)</th><th data-k="chg" class="num">24h %</th><th data-k="qv" class="num">24h vol</th>
+      <th data-k="spike" class="num">Vol spike</th><th data-k="oiCh4" class="num">OI 4h</th><th data-k="funding" class="num">Funding</th>
+      <th data-k="taker" class="num">Taker B/S</th><th data-k="lsr" class="num">L/S acct</th><th data-k="rs4" class="num">vs BTC 4h</th>
+      <th data-k="ext" class="num">Stretch</th><th>Flags</th>
+    </tr></thead>
+    <tbody></tbody>
+  </table></div>
+
+  <div class="toolbar" id="toolbar" hidden>
+    <div class="sub">Click a row for the 4h chart and trade plan. Auto-ticked = full setups scoring 60+ with no warning flags (logged to the Journal). You can still tick any coin by hand.</div>
+    <button id="chartsBtn">Show charts</button>
+    <button id="openBtn">Open in TradingView tabs</button>
+    <button id="wlBtn">Download TradingView watchlist</button>
+    <button id="logBtn">Log ticked to journal</button>
+  </div>
+  <div class="charts" id="charts"></div>
+
+  <div class="legend">
+    <b>Score (0–100):</b> EMA alignment 35 · OI rising with the move 12 · Volume rank vs other movers 12 · Volume spike 10 · Taker buy/sell flow 10 · Strength vs BTC 8 · BTC alignment 8 · Not crowded (funding + long/short ratio) 5 · <span class="warn">−10 if stretched</span> more than 3 ATR from the 1h EMA 20.<br>
+    <b>Read the flags:</b> <span class="pill p-warn">OI falling</span> move is driven by positions closing (squeeze/fade), not new money ·
+    <span class="pill p-warn">Crowded</span> funding or long/short ratio says one side is packed in, risk of a flush ·
+    <span class="pill p-warn">Stretched</span> late entry, wait for a pullback to the EMA · <span class="pill p-warn">vs BTC</span> trading against the market leader.<br>
+    This is a filter that applies your rules faster — it does not predict price. Confirm on the chart and size every trade so one loss can’t hurt you.
+  </div>
+</main>
+
+<main id="tab-journal" hidden>
+  <div class="toolbar" style="margin-top:0">
+    <div class="sub">Every scan logs its auto-ticked picks once per coin per day. “Check results” looks at what price did after 4h and 24h, and whether the planned stop or first target was hit first.</div>
+    <button class="primary" id="evalBtn">Check results</button>
+    <button id="expBtn">Export</button>
+    <button id="impBtn">Import</button><input type="file" id="impFile" accept=".json" hidden>
+    <button id="clrBtn">Clear</button>
+  </div>
+  <div class="status" id="jstatus"></div>
+  <div class="stats" id="jstats"></div>
+  <div class="tablewrap"><table id="jtbl">
+    <thead><tr><th>Logged</th><th>Coin</th><th>Setup</th><th class="num">Score</th><th class="num">Entry</th><th class="num">+4h</th><th class="num">+24h</th><th class="num">Best</th><th class="num">Worst</th><th>Outcome</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+</main>
+
+<main id="tab-settings" hidden>
+  <div class="grid3" style="max-width:900px">
+    <div class="box">
+      <h4>Account</h4>
+      <label class="ctl" style="margin-bottom:10px">Futures account size (USDT) <input id="acct" type="number" value="500" min="1" style="width:100px"></label>
+      <label class="ctl">Risk per trade (%) <input id="riskPct" type="number" value="1" min="0.1" step="0.1"></label>
+      <p class="sub">The trade plan sizes each position so hitting the stop loses only this % of the account.</p>
+    </div>
+    <div class="box">
+      <h4>Stop & targets</h4>
+      <label class="ctl" style="margin-bottom:10px">Stop distance (× 1h ATR) <input id="atrMult" type="number" value="1.5" min="0.5" step="0.1"></label>
+      <label class="ctl" style="margin-bottom:10px">Target 1 (R) <input id="t1R" type="number" value="1.5" min="0.5" step="0.5"></label>
+      <label class="ctl">Target 2 (R) <input id="t2R" type="number" value="3" min="1" step="0.5"></label>
+    </div>
+    <div class="box">
+      <h4>Alerts</h4>
+      <p class="sub">With auto-rescan on, you get a sound and a desktop notification when a coin newly turns into a full LONG/SHORT setup with score ≥ 60. Keep this tab open.</p>
+      <button id="notifBtn" class="small">Allow notifications</button>
+    </div>
+  </div>
+</main>
+
+<script>
+const API = 'https://fapi.binance.com';
+const TFS = [
+  {tf:'15m', fast:9,  slow:21},
+  {tf:'1h',  fast:20, slow:50},
+  {tf:'4h',  fast:50, slow:200},
+];
+
+/* ================= maths ================= */
+function ema(vals, n){
+  if (vals.length < n) return [];
+  const k = 2/(n+1); const out = new Array(vals.length).fill(null);
+  let s = 0; for (let i=0;i<n;i++) s += vals[i];
+  out[n-1] = s/n;
+  for (let i=n;i<vals.length;i++) out[i] = vals[i]*k + out[i-1]*(1-k);
+  return out;
+}
+function trend(closes, fast, slow){
+  const f = ema(closes, fast), s = ema(closes, slow), i = closes.length-1;
+  if (f[i]==null || s[i]==null) return 0;
+  const p = closes[i];
+  if (p > f[i] && f[i] > s[i]) return 1;
+  if (p < f[i] && f[i] < s[i]) return -1;
+  return 0;
+}
+function atr(h, l, c, n=14){
+  if (c.length <= n) return 0;
+  const tr = c.map((_,i)=> i===0 ? h[0]-l[0] : Math.max(h[i]-l[i], Math.abs(h[i]-c[i-1]), Math.abs(l[i]-c[i-1])));
+  let a = tr.slice(1, n+1).reduce((x,y)=>x+y,0)/n;
+  for (let i=n+1;i<tr.length;i++) a = (a*(n-1) + tr[i])/n;
+  return a;
+}
+function pearson(a, b){
+  const n = Math.min(a.length, b.length); if (n < 5) return 0;
+  a = a.slice(-n); b = b.slice(-n);
+  const ma = a.reduce((x,y)=>x+y,0)/n, mb = b.reduce((x,y)=>x+y,0)/n;
+  let num=0, da=0, db=0;
+  for (let i=0;i<n;i++){ const x=a[i]-ma, y=b[i]-mb; num+=x*y; da+=x*x; db+=y*y; }
+  return (da&&db) ? num/Math.sqrt(da*db) : 0;
+}
+const returns = c => c.slice(1).map((v,i)=> v/c[i]-1);
+const pctChange = (c, bars) => c.length > bars ? (c[c.length-1]/c[c.length-1-bars]-1)*100 : 0;
+const clamp01 = x => Math.max(0, Math.min(1, x));
+const avg = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0;
+
+/* ================= data ================= */
+async function getJSON(path){
+  const r = await fetch(API + path);
+  if (!r.ok) throw new Error('Binance replied ' + r.status + ' for ' + path.split('?')[0]);
+  return r.json();
+}
+async function safe(p){ try { return await p; } catch(e){ return null; } }
+async function klines(sym, tf, limit=300){
+  const k = await getJSON(`/fapi/v1/klines?symbol=${sym}&interval=${tf}&limit=${limit}`);
+  return { t:k.map(x=>+x[0]), open:k.map(x=>+x[1]), high:k.map(x=>+x[2]), low:k.map(x=>+x[3]), close:k.map(x=>+x[4]), qvol:k.map(x=>+x[7]) };
+}
+async function derivs(sym){
+  const [oi, tk, ls] = await Promise.all([
+    safe(getJSON(`/futures/data/openInterestHist?symbol=${sym}&period=1h&limit=25`)),
+    safe(getJSON(`/futures/data/takerlongshortRatio?symbol=${sym}&period=1h&limit=3`)),
+    safe(getJSON(`/futures/data/globalLongShortAccountRatio?symbol=${sym}&period=1h&limit=1`)),
+  ]);
+  const out = { oiCh4:null, oiCh24:null, taker:null, lsr:null };
+  if (Array.isArray(oi) && oi.length >= 5){
+    const v = oi.map(x => +x.sumOpenInterestValue);
+    out.oiCh4 = (v[v.length-1]/v[v.length-5]-1)*100;
+    out.oiCh24 = (v[v.length-1]/v[0]-1)*100;
+  }
+  if (Array.isArray(tk) && tk.length){
+    const b = tk.reduce((s,x)=>s + +x.buyVol, 0), s2 = tk.reduce((s,x)=>s + +x.sellVol, 0);
+    out.taker = s2 ? b/s2 : null;
+  }
+  if (Array.isArray(ls) && ls.length) out.lsr = +ls[ls.length-1].longShortRatio;
+  return out;
+}
+async function pool(items, limit, fn){
+  const out = new Array(items.length); let i = 0;
+  async function worker(){ while (i < items.length){ const j = i++; out[j] = await fn(items[j], j); } }
+  await Promise.all(Array.from({length:limit}, worker));
+  return out;
+}
+async function analyse(sym, withDerivs=true){
+  const data = {};
+  for (const t of TFS) data[t.tf] = await klines(sym, t.tf);
+  const trends = TFS.map(t => trend(data[t.tf].close, t.fast, t.slow));
+  const h1 = data['1h'];
+  const closed = h1.qvol.slice(0, -1);
+  const spike = avg(closed.slice(-27,-3)) ? avg(closed.slice(-3))/avg(closed.slice(-27,-3)) : 1;
+  const price = h1.close[h1.close.length-1];
+  const a = atr(h1.high, h1.low, h1.close, 14);
+  const e20 = ema(h1.close, 20); const lastE = e20[e20.length-1];
+  const ext = a ? (price - lastE)/a : 0;
+  const d = withDerivs ? await derivs(sym) : {};
+  // last 60 candles of the 4h chart, with its EMA 50/200, for the mini charts
+  const h4 = data['4h'], N = 60, cut = a => a.slice(-N);
+  const c4 = { o:cut(h4.open), h:cut(h4.high), l:cut(h4.low), c:cut(h4.close),
+               e1:cut(ema(h4.close, 50)), e2:cut(ema(h4.close, 200)) };
+  return { trends, spike, price, atr:a, ext, h1close:h1.close, ch4: pctChange(h1.close, 4), c4, ...d };
+}
+
+/* ================= scoring ================= */
+function scoreCoin(c, btc){
+  const sum = c.trends.reduce((a,b)=>a+b,0);
+  const dir = sum > 0 ? 1 : sum < 0 ? -1 : (c.chg >= 0 ? 1 : -1);
+  const full = Math.abs(sum) === 3;
+  const agree = c.trends.filter(t => t === dir).length;
+  const btcSum = btc.trends.reduce((a,b)=>a+b,0);
+  const btcDir = btcSum === 3 ? 1 : btcSum === -3 ? -1 : 0;
+  const flags = [];
+
+  let btcPts;
+  if (btcDir === dir) btcPts = 8;
+  else if (Math.abs(c.corr) < 0.3) btcPts = 5.6;
+  else if (btcDir === 0) btcPts = 4;
+  else { btcPts = 0; flags.push('vs BTC'); }
+
+  let oiPts = 6;                                           // neutral if no data
+  if (c.oiCh4 != null){
+    const withMove = dir * c.ch4 > 0;
+    if (c.oiCh4 <= 0){ oiPts = 0; if (withMove) flags.push('OI falling'); }
+    else oiPts = withMove ? 4 + 8*clamp01(c.oiCh4/8) : 3;
+  }
+  let tkPts = 5;
+  if (c.taker != null) tkPts = 10 * clamp01(dir > 0 ? (c.taker-0.95)/0.25 : (1.05-c.taker)/0.25);
+
+  let crowdPts = 5;
+  const fPct = c.funding != null ? c.funding*100 : null;
+  const crowdF = fPct != null && (dir > 0 ? fPct >= 0.05 : fPct <= -0.05);
+  const crowdL = c.lsr != null && (dir > 0 ? c.lsr >= 2.5 : c.lsr <= 0.6);
+  if (crowdF) crowdPts -= 3;
+  if (crowdL) crowdPts -= 2;
+  if (crowdF || crowdL) flags.push('Crowded');
+
+  const stretched = dir * c.ext > 3;
+  if (stretched) flags.push('Stretched');
+
+  const pts = {
+    ema: 35*agree/3,
+    oi: oiPts,
+    volRank: c.volPct * 12,
+    spike: clamp01((c.spike-1)/2) * 10,
+    taker: tkPts,
+    rs: clamp01(dir * c.rs4 / 5) * 8,
+    btc: btcPts,
+    crowd: crowdPts,
+    stretch: stretched ? -10 : 0,
+  };
+  const score = Math.max(0, Math.min(100, Math.round(Object.values(pts).reduce((a,b)=>a+b,0))));
+  return { ...c, dir, full, score, pts, flags };
+}
+
+/* ================= 4h candle chart (SVG) ================= */
+function candleSVG(c4, w, h, opts = {}){
+  if (!c4 || !c4.c.length) return '';
+  const n = c4.c.length, pad = opts.big ? 10 : 2, right = opts.big ? 92 : 0;
+  // price range = candles + trade levels; EMAs that sit far away are clipped instead of squashing the candles
+  const lines = [opts.stop, opts.t1, opts.entry].filter(v => v != null);
+  let hi = Math.max(...c4.h, ...lines), lo = Math.min(...c4.l, ...lines);
+  const m = (hi - lo) * 0.04; hi += m; lo -= m;
+  const y = v => pad + (hi - v) / ((hi - lo) || 1) * (h - pad*2);
+  const step = (w - right - pad*2) / n, bw = Math.max(1, step * 0.65);
+  const cid = 'clip' + Math.random().toString(36).slice(2,8);
+  let s = opts.big
+    ? `<svg viewBox="0 0 ${w} ${h}" width="100%" style="display:block;height:auto"><defs><clipPath id="${cid}"><rect x="0" y="0" width="${w-right}" height="${h}"/></clipPath></defs>`
+    : `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="display:block">`;
+  if (opts.big) for (let i=0;i<=4;i++){
+    const v = lo + (hi-lo)*i/4, yy = y(v).toFixed(1);
+    s += `<line x1="${pad}" x2="${w-right}" y1="${yy}" y2="${yy}" stroke="var(--line)" stroke-width="1"/><text x="${w-right+6}" y="${+yy+4}" fill="var(--muted)" font-size="10" font-family="JetBrains Mono,monospace">${fmtPx(v)}</text>`;
+  }
+  for (let i=0;i<n;i++){
+    const up = c4.c[i] >= c4.o[i], col = up ? 'var(--long)' : 'var(--short)';
+    const x = pad + i*step + step/2;
+    const top = y(Math.max(c4.o[i], c4.c[i])), bot = y(Math.min(c4.o[i], c4.c[i]));
+    s += `<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${y(c4.h[i]).toFixed(1)}" y2="${y(c4.l[i]).toFixed(1)}" stroke="${col}" stroke-width="1"/>`;
+    s += `<rect x="${(x-bw/2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, bot-top).toFixed(1)}" fill="${col}"/>`;
+  }
+  if (opts.big){
+    const path = (arr, col) => { const pts = arr.map((v,i)=> v==null ? null : `${(pad+i*step+step/2).toFixed(1)},${y(v).toFixed(1)}`).filter(Boolean);
+      return pts.length > 1 ? `<polyline points="${pts.join(' ')}" fill="none" stroke="${col}" stroke-width="1.5"/>` : ''; };
+    s += `<g clip-path="url(#${cid})">${path(c4.e1, 'var(--accent)')}${path(c4.e2, 'var(--info)')}</g>`;
+    // trade levels: dashed lines, labels nudged apart so they never overlap
+    const lv = [[opts.t1,'var(--long)','T1'],[opts.entry,'var(--text)','ENTRY'],[opts.stop,'var(--short)','STOP']]
+      .filter(x => x[0] != null).map(([v,col,lab]) => ({ v, col, lab, yy: y(v), ly: y(v) })).sort((a,b) => a.yy - b.yy);
+    for (let i=1;i<lv.length;i++) if (lv[i].ly - lv[i-1].ly < 13) lv[i].ly = lv[i-1].ly + 13;
+    lv.forEach(L => {
+      s += `<line x1="${pad}" x2="${w-right}" y1="${L.yy.toFixed(1)}" y2="${L.yy.toFixed(1)}" stroke="${L.col}" stroke-dasharray="5 4" stroke-width="1.2"/>`;
+      s += `<rect x="${w-right+2}" y="${(L.ly-7).toFixed(1)}" width="${right-4}" height="14" rx="3" fill="var(--panel)"/>`;
+      s += `<text x="${w-right+6}" y="${(L.ly+4).toFixed(1)}" fill="${L.col}" font-size="10" font-weight="700" font-family="JetBrains Mono,monospace">${L.lab} ${fmtPx(L.v)}</text>`;
+    });
+  }
+  return s + '</svg>';
+}
+const fmtPx = p => p >= 100 ? p.toFixed(1) : p >= 1 ? p.toFixed(3) : p.toPrecision(3);
+
+/* ================= trade plan ================= */
+function plan(c, s){
+  const risk = s.atrMult * c.atr;
+  const entry = c.price;
+  const stop = entry - c.dir*risk;
+  const t1 = entry + c.dir*risk*s.t1R, t2 = entry + c.dir*risk*s.t2R;
+  const riskUsd = s.acct * s.riskPct/100;
+  const qty = risk ? riskUsd / risk : 0;
+  const notional = qty * entry;
+  return { entry, stop, t1, t2, stopPct: entry ? risk/entry*100 : 0, riskUsd, qty, notional, lev: s.acct ? notional/s.acct : 0 };
+}
+
+/* ================= scan ================= */
+async function scan(opts, onProgress = ()=>{}){
+  const [info, tickers, prem] = await Promise.all([
+    getJSON('/fapi/v1/exchangeInfo'), getJSON('/fapi/v1/ticker/24hr'), safe(getJSON('/fapi/v1/premiumIndex'))]);
+  const live = new Set(info.symbols
+    .filter(s => s.contractType === 'PERPETUAL' && s.quoteAsset === 'USDT' && s.status === 'TRADING').map(s => s.symbol));
+  const fund = new Map((prem || []).map(p => [p.symbol, +p.lastFundingRate]));
+  const LEAD = ['BTCUSDT','ETHUSDT'];
+  const pool0 = tickers
+    .filter(t => live.has(t.symbol) && !LEAD.includes(t.symbol) && +t.quoteVolume >= opts.minVol*1e6)
+    .map(t => ({ sym:t.symbol, chg:+t.priceChangePercent, qv:+t.quoteVolume }));
+  const gainers = [...pool0].sort((a,b)=>b.chg-a.chg).slice(0, opts.n);
+  let picks = gainers;
+  if (opts.incDump){
+    const losers = [...pool0].sort((a,b)=>a.chg-b.chg).slice(0, Math.ceil(opts.n/2));
+    picks = [...gainers, ...losers.filter(l => !gainers.some(g => g.sym === l.sym))];
+  }
+  onProgress('Reading BTC and ETH…');
+  const leaders = {};
+  for (const s of LEAD){
+    const a = await analyse(s, true);
+    const t = tickers.find(x => x.symbol === s);
+    leaders[s] = { ...a, sym:s, chg: t ? +t.priceChangePercent : 0, funding: fund.get(s) ?? null };
+  }
+  const btc = leaders.BTCUSDT;
+  const btcRet = returns(btc.h1close.slice(-49));
+  const byVol = [...picks].sort((a,b)=>a.qv-b.qv);
+  picks.forEach(p => p.volPct = picks.length > 1 ? byVol.indexOf(p)/(picks.length-1) : 1);
+
+  let done = 0;
+  const res = await pool(picks, 4, async p => {
+    try {
+      const a = await analyse(p.sym, true);
+      onProgress(`Analysing ${++done}/${picks.length} — ${p.sym}`);
+      const corr = pearson(returns(a.h1close.slice(-49)), btcRet);
+      return scoreCoin({ ...p, ...a, corr, rs4: a.ch4 - btc.ch4, funding: fund.get(p.sym) ?? null }, btc);
+    } catch(e){ done++; return null; }
+  });
+  return { at: Date.now(), leaders, btc, coins: res.filter(Boolean).sort((a,b)=>b.score-a.score) };
+}
+
+/* ================= journal ================= */
+function evaluate(entry, k){
+  // k: 1h klines starting at the log time. Returns outcome in the trade's direction.
+  const d = entry.dir, e = entry.entry;
+  const res = { ret4:null, ret24:null, best:null, worst:null, outcome:'open', r:null };
+  if (!k || !k.close.length) return res;
+  const mv = p => d*(p/e-1)*100;
+  if (k.close.length > 4) res.ret4 = mv(k.close[4]);
+  if (k.close.length > 24) res.ret24 = mv(k.close[24]);
+  let best = -Infinity, worst = Infinity;
+  for (let i=0;i<Math.min(k.close.length, 25);i++){
+    const fav = d>0 ? k.high[i] : k.low[i], adv = d>0 ? k.low[i] : k.high[i];
+    best = Math.max(best, mv(fav)); worst = Math.min(worst, mv(adv));
+    if (res.outcome === 'open'){
+      const hitStop = d>0 ? adv <= entry.stop : adv >= entry.stop;
+      const hitT1 = d>0 ? fav >= entry.t1 : fav <= entry.t1;
+      if (hitStop) { res.outcome = 'stop'; res.r = -1; }            // same-candle ties count as a loss
+      else if (hitT1) { res.outcome = 'target'; res.r = entry.t1R; }
+    }
+  }
+  res.best = best; res.worst = worst;
+  if (res.outcome === 'open'){
+    const last = k.close[Math.min(k.close.length,25)-1];
+    const riskPct = Math.abs(entry.entry-entry.stop)/entry.entry*100;
+    res.r = riskPct ? mv(last)/riskPct : 0;
+    if (k.close.length > 24) res.outcome = 'expired';
+  }
+  return res;
+}
+function journalStats(list){
+  const done = list.filter(j => j.res && j.res.outcome !== 'open');
+  const wins = done.filter(j => j.res.outcome === 'target').length;
+  const stops = done.filter(j => j.res.outcome === 'stop').length;
+  const r = done.reduce((s,j)=> s + (j.res.r || 0), 0);
+  const w24 = list.filter(j => j.res && j.res.ret24 != null);
+  const buckets = [[60,70],[70,80],[80,101]].map(([lo,hi]) => {
+    const b = done.filter(j => j.score >= lo && j.score < hi);
+    return { label: hi>100 ? `${lo}+` : `${lo}–${hi-1}`, n:b.length, avgR: b.length ? b.reduce((s,j)=>s+(j.res.r||0),0)/b.length : null };
+  });
+  return { total:list.length, closed:done.length, wins, stops, winRate: done.length ? wins/done.length : null,
+           avgR: done.length ? r/done.length : null,
+           dirHit24: w24.length ? w24.filter(j=>j.res.ret24>0).length/w24.length : null, buckets };
+}
+
+/* ================= UI ================= */
+if (typeof document !== 'undefined'){
+const $ = s => document.querySelector(s);
+const store = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch(e){ return d; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} },
+};
+let last = null, sortKey = 'score', sortDesc = true, open = null, seenFull = null, timer = null;
+let journal = store.get('mfs_journal', []);
+
+/* settings */
+const SET_IDS = ['acct','riskPct','atrMult','t1R','t2R','nMovers','minVol','autoMin'];
+const saved = store.get('mfs_settings', {});
+SET_IDS.forEach(id => { if (saved[id] != null) $('#'+id).value = saved[id]; $('#'+id).onchange = saveSettings; });
+if (saved.incDump != null) $('#incDump').checked = saved.incDump;
+function saveSettings(){
+  const o = {}; SET_IDS.forEach(id => o[id] = +$('#'+id).value); o.incDump = $('#incDump').checked;
+  store.set('mfs_settings', o); if (last) renderTable();
+}
+$('#incDump').onchange = saveSettings;
+const S = () => ({ acct:+$('#acct').value||0, riskPct:+$('#riskPct').value||1, atrMult:+$('#atrMult').value||1.5, t1R:+$('#t1R').value||1.5, t2R:+$('#t2R').value||3 });
+
+/* tabs */
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x===b));
+  ['scan','journal','settings'].forEach(t => $('#tab-'+t).hidden = t !== b.dataset.tab);
+  if (b.dataset.tab === 'journal') renderJournal();
+});
+
+/* formatting */
+const tvSym = s => `BINANCE:${s}.P`;
+const tvUrl = s => `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSym(s))}`;
+const cgUrl = s => `https://www.coinglass.com/currencies/${s.replace(/USDT$/,'').replace(/^1000+/,'')}`;
+const fmtVol = v => v >= 1e9 ? (v/1e9).toFixed(2)+'B' : (v/1e6).toFixed(0)+'M';
+const fmtP = p => p >= 100 ? p.toFixed(2) : p >= 1 ? p.toFixed(4) : p.toPrecision(4);
+const sgn = (v, d=2, suf='%') => v == null ? '<span class="sub">–</span>' : `<span class="${v>=0?'up':'dn'}">${v>=0?'+':''}${v.toFixed(d)}${suf}</span>`;
+const tfCell = tr => `<div class="tfs">${tr.map((t,i)=>`<span class="tf ${t>0?'up':t<0?'dn':'fl'}">${TFS[i].tf} ${t>0?'▲':t<0?'▼':'–'}</span>`).join('')}</div>`;
+const setup = c => c.full
+  ? `<span class="pill ${c.dir>0?'p-long':'p-short'}">${c.dir>0?'LONG':'SHORT'}</span>`
+  : `<span class="pill p-mixed">leans ${c.dir>0?'long':'short'}</span>`;
+const flagHtml = c => c.flags.map(f => `<span class="pill p-warn">${f}</span>`).join('') || '<span class="sub">–</span>';
+const fundCell = f => { if (f == null) return '<span class="sub">–</span>'; const p = f*100; return `<span class="${Math.abs(p)>=0.05?'warn':''}">${p.toFixed(4)}%</span>`; };
+
+function renderLeaders(L){
+  $('#leaders').innerHTML = Object.values(L).map(b => {
+    const s = b.trends.reduce((x,y)=>x+y,0);
+    const lab = s===3?'<span class="pill p-long">BULLISH</span>':s===-3?'<span class="pill p-short">BEARISH</span>':'<span class="pill p-mixed">MIXED</span>';
+    return `<div class="lead">
+      <div><div class="sub">${b.sym==='BTCUSDT'?'Market leader':'Second leader'}</div><div class="big mono">${b.sym.replace('USDT','')} ${fmtP(b.price)}</div></div>
+      <div><div class="sub">24h</div><div class="mono">${sgn(b.chg)}</div></div>
+      <div><div class="sub">OI 4h</div><div class="mono">${sgn(b.oiCh4)}</div></div>
+      <div><div class="sub">EMAs</div>${tfCell(b.trends)}</div>
+      <div>${lab}</div>
+      <div><a href="${tvUrl(b.sym)}" target="_blank" rel="noopener">chart ↗</a></div></div>`;
+  }).join('');
+}
+function detailHtml(c){
+  const p = plan(c, S());
+  const ptsRows = Object.entries({ 'EMA alignment':c.pts.ema, 'OI with move':c.pts.oi, 'Volume rank':c.pts.volRank, 'Volume spike':c.pts.spike,
+    'Taker flow':c.pts.taker, 'vs BTC':c.pts.rs, 'BTC alignment':c.pts.btc, 'Not crowded':c.pts.crowd, 'Stretch penalty':c.pts.stretch })
+    .map(([k,v]) => `<span>${k}</span><span class="mono">${v.toFixed(1)}</span>`).join('');
+  return `<div class="box" style="margin-bottom:16px"><h4>${c.sym} · 4h · last 10 days &nbsp;<span style="color:var(--accent)">— EMA 50</span> &nbsp;<span style="color:var(--info)">— EMA 200</span></h4>
+    <div style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px">${candleSVG(c.c4, 1000, 260, { big:true, entry:p.entry, stop:p.stop, t1:p.t1 })}</div></div>
+    <div class="grid3">
+    <div class="box"><h4>Trade plan (${c.dir>0?'long':'short'})</h4><div class="kv mono">
+      <span>Entry ≈</span><span>${fmtP(p.entry)}</span>
+      <span>Stop</span><span class="dn">${fmtP(p.stop)} (${p.stopPct.toFixed(2)}%)</span>
+      <span>Target 1</span><span class="up">${fmtP(p.t1)} (${S().t1R}R)</span>
+      <span>Target 2</span><span class="up">${fmtP(p.t2)} (${S().t2R}R)</span>
+      <span>Risk</span><span>${p.riskUsd.toFixed(2)} USDT</span>
+      <span>Position</span><span>${p.qty.toPrecision(4)} ${c.sym.replace('USDT','')} ≈ ${p.notional.toFixed(0)} USDT</span>
+      <span>Leverage needed</span><span class="${p.lev>10?'warn':''}">${p.lev.toFixed(1)}×</span></div>
+      <p class="sub">Stop = ${S().atrMult}× 1h ATR. Move the stop beyond the nearest swing on the chart if that's closer to structure — the size recalculates from the distance.</p></div>
+    <div class="box"><h4>Derivatives</h4><div class="kv mono">
+      <span>OI 4h / 24h</span><span>${sgn(c.oiCh4)} / ${sgn(c.oiCh24)}</span>
+      <span>Funding</span><span>${fundCell(c.funding)}</span>
+      <span>Taker buy/sell (3h)</span><span>${c.taker==null?'–':c.taker.toFixed(2)}</span>
+      <span>Long/short accounts</span><span>${c.lsr==null?'–':c.lsr.toFixed(2)}</span>
+      <span>Price 4h</span><span>${sgn(c.ch4)}</span>
+      <span>BTC correlation</span><span>${c.corr.toFixed(2)}</span>
+      <span>Stretch from EMA20</span><span>${c.ext.toFixed(1)} ATR</span></div></div>
+    <div class="box"><h4>Score breakdown · ${c.score}</h4><div class="kv">${ptsRows}</div>
+      <p style="margin-top:10px"><a href="${tvUrl(c.sym)}" target="_blank" rel="noopener">TradingView ↗</a> &nbsp; <a href="${cgUrl(c.sym)}" target="_blank" rel="noopener">CoinGlass (liquidations) ↗</a></p></div>
+  </div>`;
+}
+function renderTable(){
+  const rows = [...last.coins].sort((a,b)=>{
+    const va = a[sortKey], vb = b[sortKey];
+    const x = sortKey==='sym' ? a.sym.localeCompare(b.sym) : ((va ?? -1e9) - (vb ?? -1e9));
+    return sortDesc ? -x : x;
+  });
+  $('#tbl tbody').innerHTML = rows.map(c => `<tr class="row ${c.full?'':'dim'}" data-s="${c.sym}">
+    <td><input type="checkbox" class="pick" value="${c.sym}" ${c.checked?'checked':''}></td>
+    <td class="mono"><b>${c.sym.replace('USDT','')}</b></td>
+    <td><div class="score"><span class="mono">${c.score}</span><div class="bar"><i style="width:${c.score}%"></i></div></div></td>
+    <td>${setup(c)}</td>
+    <td>${tfCell(c.trends)}</td>
+    <td style="padding:4px 10px">${candleSVG(c.c4, 130, 34)}</td>
+    <td class="num mono">${sgn(c.chg)}</td>
+    <td class="num mono">${fmtVol(c.qv)}</td>
+    <td class="num mono">${c.spike.toFixed(1)}×</td>
+    <td class="num mono">${sgn(c.oiCh4,1)}</td>
+    <td class="num mono">${fundCell(c.funding)}</td>
+    <td class="num mono">${c.taker==null?'–':c.taker.toFixed(2)}</td>
+    <td class="num mono">${c.lsr==null?'–':c.lsr.toFixed(2)}</td>
+    <td class="num mono">${sgn(c.rs4)}</td>
+    <td class="num mono ${c.dir*c.ext>3?'warn':''}">${c.ext.toFixed(1)}</td>
+    <td>${flagHtml(c)}</td></tr>
+    ${open===c.sym ? `<tr class="detail"><td colspan="16"><div class="dwrap">${detailHtml(c)}</div></td></tr>` : ''}`).join('');
+  document.querySelectorAll('.pick').forEach(cb => {
+    cb.onclick = e => e.stopPropagation();
+    cb.onchange = () => { last.coins.find(c => c.sym === cb.value).checked = cb.checked; };
+  });
+  document.querySelectorAll('tr.row').forEach(tr => tr.onclick = () => { open = open === tr.dataset.s ? null : tr.dataset.s; renderTable(); });
+}
+const selected = () => last ? last.coins.filter(c => c.checked) : [];
+
+/* alerts */
+function beep(){
+  try { const a = new (window.AudioContext||window.webkitAudioContext)();
+    [0,0.18].forEach(t => { const o = a.createOscillator(), g = a.createGain(); o.frequency.value = 880; g.gain.value = .15;
+      o.connect(g); g.connect(a.destination); o.start(a.currentTime+t); o.stop(a.currentTime+t+0.12); }); } catch(e){}
+}
+function notify(list){
+  beep();
+  const msg = list.map(c => `${c.sym.replace('USDT','')} ${c.dir>0?'LONG':'SHORT'} (${c.score})`).join(', ');
+  document.title = '● New setup — Morning Scanner';
+  try { if (window.Notification && Notification.permission === 'granted') new Notification('New futures setup', { body: msg }); } catch(e){}
+  $('#status').innerHTML += ` <span class="pill p-info">NEW: ${msg}</span>`;
+}
+$('#notifBtn').onclick = async () => {
+  try { const p = await Notification.requestPermission(); $('#notifBtn').textContent = p === 'granted' ? 'Notifications on' : 'Blocked by browser'; }
+  catch(e){ $('#notifBtn').textContent = 'Not supported here'; }
+};
+window.addEventListener('focus', () => document.title = 'Morning Futures Scanner');
+
+/* journal UI */
+function logPicks(list){
+  const s = S(), day = new Date().toISOString().slice(0,10); let added = 0;
+  for (const c of list){
+    if (journal.some(j => j.sym === c.sym && j.day === day)) continue;
+    const p = plan(c, s);
+    journal.unshift({ id: c.sym+'-'+Date.now(), ts: Date.now(), day, sym:c.sym, dir:c.dir, full:c.full, score:c.score,
+      entry:p.entry, stop:p.stop, t1:p.t1, t1R:s.t1R, flags:c.flags, res:null });
+    added++;
+  }
+  store.set('mfs_journal', journal);
+  return added;
+}
+function renderJournal(){
+  const st = journalStats(journal);
+  const pct = v => v == null ? '–' : Math.round(v*100)+'%';
+  $('#jstats').innerHTML = `
+    <div class="stat"><div class="sub">Logged setups</div><div class="v mono">${st.total}</div><div class="sub">${st.closed} finished</div></div>
+    <div class="stat"><div class="sub">Hit target 1 first</div><div class="v mono up">${pct(st.winRate)}</div><div class="sub">${st.wins} target · ${st.stops} stop</div></div>
+    <div class="stat"><div class="sub">Average result</div><div class="v mono ${st.avgR>=0?'up':'dn'}">${st.avgR==null?'–':(st.avgR>=0?'+':'')+st.avgR.toFixed(2)+'R'}</div><div class="sub">per finished trade</div></div>
+    <div class="stat"><div class="sub">Right direction after 24h</div><div class="v mono">${pct(st.dirHit24)}</div></div>
+    <div class="stat"><div class="sub">Avg R by score</div><div class="mono" style="margin-top:6px">${st.buckets.map(b=>`${b.label}: ${b.avgR==null?'–':(b.avgR>=0?'+':'')+b.avgR.toFixed(2)+'R'} <span class="sub">(${b.n})</span>`).join('<br>')}</div></div>`;
+  const oc = r => !r ? '<span class="sub">not checked</span>' : r.outcome==='target' ? '<span class="pill p-long">TARGET</span>' : r.outcome==='stop' ? '<span class="pill p-short">STOPPED</span>' : r.outcome==='expired' ? `<span class="pill p-mixed">24h: ${r.r>=0?'+':''}${r.r.toFixed(2)}R</span>` : `<span class="pill p-info">open ${r.r>=0?'+':''}${(r.r||0).toFixed(2)}R</span>`;
+  $('#jtbl tbody').innerHTML = journal.length ? journal.map(j => `<tr>
+    <td class="mono">${new Date(j.ts).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td>
+    <td class="mono"><b>${j.sym.replace('USDT','')}</b></td>
+    <td><span class="pill ${j.dir>0?'p-long':'p-short'}">${j.dir>0?'LONG':'SHORT'}</span>${(j.flags||[]).map(f=>`<span class="pill p-warn">${f}</span>`).join('')}</td>
+    <td class="num mono">${j.score}</td><td class="num mono">${fmtP(j.entry)}</td>
+    <td class="num mono">${sgn(j.res?.ret4)}</td><td class="num mono">${sgn(j.res?.ret24)}</td>
+    <td class="num mono">${sgn(j.res?.best)}</td><td class="num mono">${sgn(j.res?.worst)}</td>
+    <td>${oc(j.res)}</td>
+    <td><a href="${tvUrl(j.sym)}" target="_blank" rel="noopener">chart ↗</a> <button class="small" data-del="${j.id}">✕</button></td></tr>`).join('')
+    : '<tr><td colspan="11" class="sub">Nothing logged yet — run a scan.</td></tr>';
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    journal = journal.filter(j => j.id !== b.dataset.del); store.set('mfs_journal', journal); renderJournal(); });
+}
+$('#evalBtn').onclick = async () => {
+  const todo = journal.filter(j => !j.res || j.res.outcome === 'open');
+  if (!todo.length){ $('#jstatus').textContent = 'Everything is already checked.'; return; }
+  $('#evalBtn').disabled = true; let n = 0;
+  await pool(todo, 4, async j => {
+    try {
+      const k = await getJSON(`/fapi/v1/klines?symbol=${j.sym}&interval=1h&startTime=${j.ts}&limit=26`);
+      j.res = evaluate(j, { high:k.map(x=>+x[2]), low:k.map(x=>+x[3]), close:k.map(x=>+x[4]) });
+    } catch(e){}
+    $('#jstatus').textContent = `Checked ${++n}/${todo.length}`;
+  });
+  store.set('mfs_journal', journal); $('#evalBtn').disabled = false;
+  $('#jstatus').textContent = `Updated ${n} entries at ${new Date().toLocaleTimeString()}. Trades younger than 24h stay “open” until then.`;
+  renderJournal();
+};
+$('#expBtn').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(journal, null, 1)], {type:'application/json'}));
+  a.download = `scanner-journal-${new Date().toISOString().slice(0,10)}.json`; a.click();
+};
+$('#impBtn').onclick = () => $('#impFile').click();
+$('#impFile').onchange = async e => {
+  try { const data = JSON.parse(await e.target.files[0].text());
+    const ids = new Set(journal.map(j=>j.id)); journal = [...journal, ...data.filter(j => !ids.has(j.id))].sort((a,b)=>b.ts-a.ts);
+    store.set('mfs_journal', journal); renderJournal(); $('#jstatus').textContent = 'Imported.';
+  } catch(err){ $('#jstatus').textContent = 'That file could not be read.'; }
+};
+$('#clrBtn').onclick = () => { if (confirm('Delete the whole journal? Export first if you want a copy.')){ journal = []; store.set('mfs_journal', journal); renderJournal(); } };
+
+/* scanning */
+async function runScan(){
+  const btn = $('#scanBtn'), st = $('#status');
+  btn.disabled = true; st.className = 'status'; st.textContent = 'Fetching Binance futures market…';
+  try {
+    const prevChecked = new Set(selected().map(c => c.sym));
+    last = await scan({ n:+$('#nMovers').value||30, minVol:+$('#minVol').value||0, incDump:$('#incDump').checked }, m => st.textContent = m);
+    let picked = 0;
+    last.coins.forEach(c => {
+      // auto-pick only clean setups: full alignment, score 60+, no warning flags
+      const clean = !['Stretched','Crowded','OI falling'].some(f => c.flags.includes(f));
+      c.checked = prevChecked.has(c.sym) || (c.full && c.score >= 60 && clean && picked++ < 6);
+    });
+    renderLeaders(last.leaders); renderTable();
+    $('#tbl').hidden = false; $('#toolbar').hidden = false;
+    const added = logPicks(last.coins.filter(c => c.checked && c.full));
+    const full = last.coins.filter(c => c.full);
+    st.textContent = `Scanned ${last.coins.length} movers at ${new Date().toLocaleTimeString()} — ${full.length} full setups, ${selected().length} on today’s watchlist${added?`, ${added} logged to journal`:''}.`;
+    const strong = full.filter(c => c.score >= 60);
+    if (seenFull){ const fresh = strong.filter(c => !seenFull.has(c.sym)); if (fresh.length) notify(fresh); }
+    seenFull = new Set([...(seenFull||[]), ...strong.map(c => c.sym)]);
+  } catch(e){
+    st.className = 'status err';
+    st.textContent = `Couldn't reach the Binance futures API (${e.message || e}). Check your internet connection; if Binance is blocked on your network, the scan can't run.`;
+  } finally { btn.disabled = false; }
+}
+$('#scanBtn').onclick = runScan;
+$('#auto').onchange = () => {
+  clearInterval(timer); timer = null;
+  if ($('#auto').checked){ const m = Math.max(5, +$('#autoMin').value || 15); timer = setInterval(runScan, m*60000); if (!last) runScan(); }
+};
+document.querySelectorAll('th[data-k]').forEach(th => th.onclick = () => {
+  if (!last) return; const k = th.dataset.k; sortDesc = sortKey === k ? !sortDesc : true; sortKey = k; renderTable();
+});
+
+/* TradingView */
+function loadTV(){
+  return new Promise((ok, bad) => {
+    if (window.TradingView) return ok();
+    const s = document.createElement('script'); s.src = 'https://s3.tradingview.com/tv.js';
+    s.onload = ok; s.onerror = () => bad(new Error('TradingView did not load')); document.head.appendChild(s);
+  });
+}
+$('#chartsBtn').onclick = async () => {
+  const sel = selected(), box = $('#charts');
+  if (!sel.length){ box.innerHTML = '<div class="sub">Tick at least one coin.</div>'; return; }
+  try { await loadTV(); } catch(e){ box.innerHTML = `<div class="sub">${e.message}. Use the TradingView links instead.</div>`; return; }
+  box.innerHTML = sel.map(c => `<div class="chart"><div class="hd"><b class="mono">${c.sym}</b><span>${setup(c)}${flagHtml(c)}</span></div><div class="tv" id="tv_${c.sym}"></div></div>`).join('');
+  sel.forEach(c => new TradingView.widget({
+    container_id:'tv_'+c.sym, symbol:tvSym(c.sym), interval:'60', autosize:true, theme:'dark', style:'1',
+    timezone:'Africa/Addis_Ababa', allow_symbol_change:true,
+    studies:[{id:'MAExp@tv-basicstudies',inputs:{length:20}},{id:'MAExp@tv-basicstudies',inputs:{length:50}},'Volume@tv-basicstudies'],
+  }));
+  box.scrollIntoView({behavior:'smooth'});
+};
+$('#openBtn').onclick = () => {
+  const sel = selected(); if (!sel.length) return alert('Tick at least one coin.');
+  sel.forEach(c => window.open(tvUrl(c.sym), '_blank'));
+  if (sel.length > 1) $('#status').textContent = 'If only one tab opened, allow pop-ups for this page and click again.';
+};
+$('#wlBtn').onclick = () => {
+  const sel = selected(); if (!sel.length) return alert('Tick at least one coin.');
+  const txt = ['###MORNING SCAN '+new Date().toISOString().slice(0,10), tvSym('BTCUSDT'), tvSym('ETHUSDT'), ...sel.map(c => tvSym(c.sym))].join(',');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt],{type:'text/plain'}));
+  a.download = `watchlist-${new Date().toISOString().slice(0,10)}.txt`; a.click();
+};
+$('#logBtn').onclick = () => { const n = logPicks(selected()); $('#status').textContent = n ? `${n} coin(s) logged to the journal.` : 'Those coins are already logged today.'; };
+}
+
+/* ===== Telegram Mini App glue ===== */
+(function(){
+  const tg = window.Telegram && window.Telegram.WebApp;
+  if (!tg || !tg.initData) return;            // opened in a normal browser
+  tg.ready(); tg.expand();
+  try { tg.setHeaderColor('#14181d'); tg.setBackgroundColor('#0b0e11'); } catch(e){}
+  // open TradingView / CoinGlass outside Telegram
+  document.addEventListener('click', e => {
+    const a = e.target.closest('a[target=_blank]');
+    if (a){ e.preventDefault(); tg.openLink(a.href); }
+  }, true);
+  const _open = window.open;
+  window.open = (url, t) => { if (url && /^https?:/.test(url)) { tg.openLink(url); return null; } return _open(url, t); };
+  // scan straight away when opened from the bot
+  window.addEventListener('load', () => { const b = document.getElementById('scanBtn'); if (b) b.click(); });
+})();
+if (typeof module !== 'undefined') module.exports = { ema, trend, atr, pearson, scoreCoin, plan, scan, evaluate, journalStats, TFS };
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+# Netlify hosts only the scanner page (the Telegram Mini App).
+# The bot itself runs on your PC.
+[build]
+  publish = "webapp"
+  command = ""
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-cache"

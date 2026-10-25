@@ -1,0 +1,12 @@
+# secrets — never commit
+.env
+
+# your trade data stays on your PC
+*.db
+*.db-journal
+*.csv
+
+# python
+.venv/
+__pycache__/
+*.pyc
