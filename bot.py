@@ -26,13 +26,21 @@ import scanner
 import store
 import tradechart
 
-load_dotenv()
-logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO)
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO,
+                    handlers=[logging.StreamHandler(),
+                              logging.FileHandler(os.path.join(os.path.dirname(os.path.abspath(__file__)), "bot.log"),
+                                                  encoding="utf-8")])
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 log = logging.getLogger("bot")
 
-TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip().strip('"').strip("'")
+if not TOKEN or ":" not in TOKEN:
+    log_ = logging.getLogger("bot")
+    log_.error("TELEGRAM_BOT_TOKEN is missing or not in the right format (it looks like 7123456789:AAH...). "
+               "Open .env in Notepad, paste the token from @BotFather right after TELEGRAM_BOT_TOKEN= and save.")
+    raise SystemExit(1)
 MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5-5")
 TZ = ZoneInfo(os.getenv("TIMEZONE", "Africa/Addis_Ababa"))
 MORNING = os.getenv("MORNING_TIME", "08:00")
@@ -438,8 +446,13 @@ async def post_init(app: Application):
         log.info("No owner yet — open the bot in Telegram and send /start")
 
 
+async def on_error(update, ctx: ContextTypes.DEFAULT_TYPE):
+    log.error("Error while handling an update: %s", ctx.error, exc_info=ctx.error)
+
+
 def main():
     app = Application.builder().token(TOKEN).post_init(post_init).build()
+    app.add_error_handler(on_error)
     app.add_handler(CommandHandler("start", start))
     for name, fn in [("help", help_cmd), ("rules", rules_cmd), ("today", today_cmd), ("yesterday", yesterday_cmd),
                      ("day", day_cmd), ("week", week_cmd), ("scan", scan_cmd), ("morning", morning_cmd),
