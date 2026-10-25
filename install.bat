@@ -11,7 +11,7 @@ if errorlevel 1 (
 )
 python -m venv .venv
 call .venv\Scripts\activate.bat
-pip install --prefer-binary -r requirements.txt
+pip install --prefer-binary --timeout 120 --retries 10 -r requirements.txt
 if errorlevel 1 (
   echo.
   echo Install failed. Take a screenshot of this window and send it to Claude.
