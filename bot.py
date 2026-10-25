@@ -36,6 +36,7 @@ logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=loggin
                                                   encoding="utf-8")])
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
 log = logging.getLogger("bot")
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip().strip('"').strip("'")
@@ -96,7 +97,8 @@ def parse_hhmm(s):
 def schedule(app: Application, chat_id: int):
     jq = app.job_queue
     for j in jq.jobs():
-        j.schedule_removal()
+        if j.name != "reload":                       # keep the self-update check running
+            j.schedule_removal()
     jq.run_daily(morning_job, parse_hhmm(MORNING), chat_id=chat_id, name="morning")
     jq.run_repeating(inbox_job, interval=60, first=10, chat_id=chat_id, name="inbox")
     if EVENING:
