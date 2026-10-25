@@ -5,147 +5,212 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Morning Futures Scanner</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0b0e11; --panel:#14181d; --panel2:#1b2027; --line:#262c35;
-  --text:#e6e8eb; --muted:#8a93a0; --long:#16c784; --short:#ea3943;
-  --warn:#f0b90b; --accent:#f0b90b; --info:#5aa9ff;
+  --ink:#0e1524; --ink2:#151e33; --ink3:#1c2742; --line:#26324f;
+  --fog:#e9edf5; --mist:#8e99b3; --long:#2fd3a5; --short:#ff6b6b; --amber:#ffb547; --info:#7cb4ff;
+  --mood:#1c2538; --mood-ink:#e9edf5;
+  /* legacy names used by the chart and trade-plan code */
+  --bg:var(--ink); --panel:var(--ink2); --panel2:var(--ink3); --text:var(--fog); --muted:var(--mist); --warn:var(--amber); --accent:var(--amber);
+  --r-sm:6px; --r-md:12px;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Inter,system-ui,sans-serif}
-.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
-header{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--line);background:var(--panel)}
-h1{font-size:18px;margin:0}
-h1 span{color:var(--accent)}
-.sub{color:var(--muted);font-size:12px}
-.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-label.ctl{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px}
-input[type=number]{width:72px;background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:6px 8px;border-radius:6px}
-button{background:var(--panel2);color:var(--text);border:1px solid var(--line);padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-family:inherit}
-button:hover{border-color:var(--muted)}
-button.primary{background:var(--accent);color:#111;border-color:var(--accent)}
-button.small{padding:4px 10px;font-size:12px}
-button:disabled{opacity:.5;cursor:default}
-nav{display:flex;gap:4px;padding:0 24px;border-bottom:1px solid var(--line);background:var(--panel)}
-nav button{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;color:var(--muted);padding:10px 14px}
-nav button.on{color:var(--text);border-bottom-color:var(--accent)}
-main{padding:18px 24px;max-width:1600px;margin:0 auto}
-.status{color:var(--muted);margin-bottom:14px;min-height:20px}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ink);color:var(--fog);font:15px/1.45 Archivo,system-ui,sans-serif;font-variant-numeric:tabular-nums;padding-bottom:84px}
+.mono{font-variant-numeric:tabular-nums}
+button,input{font-family:inherit}
+a{color:var(--info);text-decoration:none}
+a:hover{text-decoration:underline}
+.sub{color:var(--mist);font-size:13px}
+.up{color:var(--long)} .dn{color:var(--short)} .warn{color:var(--amber)}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+[hidden]{display:none!important}
+
+/* ---------- the one loud thing: market mood ---------- */
+.mood{background:var(--mood);color:var(--mood-ink);padding:22px 18px 18px;transition:background .5s}
+.mood[data-state=bull]{--mood:#0f3a33}
+.mood[data-state=bear]{--mood:#3d1c27}
+.mood[data-state=mixed]{--mood:#1f2a41}
+.mood .when{font-size:13px;opacity:.75}
+.mood h1{font-stretch:118%;font-weight:800;font-size:clamp(26px,7.4vw,40px);line-height:1.05;letter-spacing:-.01em;margin:6px 0 8px;max-width:20ch}
+.mood p{margin:0;font-size:15px;opacity:.85;max-width:44ch}
+.leadrow{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.lead{display:flex;align-items:baseline;gap:10px;background:rgba(255,255,255,.06);border-radius:var(--r-sm);padding:8px 12px;font-size:14px}
+.lead b{font-stretch:125%;font-weight:700;letter-spacing:.02em}
+.lead .tfd{letter-spacing:2px;font-size:12px}
+.lead a{color:inherit;opacity:.7;font-size:13px}
+
+/* ---------- tabs ---------- */
+nav{display:flex;gap:2px;padding:0 10px;background:var(--ink);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+nav button{flex:1;background:none;border:0;color:var(--mist);padding:13px 6px 11px;font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer}
+nav button.on{color:var(--fog);border-bottom-color:var(--fog)}
+main{padding:14px 14px 8px;max-width:1180px;margin:0 auto}
+
+/* ---------- filter ---------- */
+.filters{display:grid;grid-template-columns:repeat(3,1fr);background:var(--ink2);border-radius:var(--r-md);padding:4px;gap:4px;margin-bottom:12px}
+.filters button{background:none;border:0;color:var(--mist);padding:9px 4px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer}
+.filters button span{display:block;font-size:20px;font-weight:700;color:var(--fog);font-stretch:110%}
+.filters button.on{background:var(--ink3);color:var(--fog)}
+.status{color:var(--mist);font-size:13px;margin:4px 2px 12px}
+.status:empty{display:none}
 .status.err{color:var(--short)}
-.leaders{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px;margin-bottom:16px}
-.lead{display:flex;flex-wrap:wrap;gap:16px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
-.lead .big{font-size:18px;font-weight:700}
-.pill{display:inline-block;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.3px;margin:1px 2px 1px 0}
-.p-long{background:rgba(22,199,132,.15);color:var(--long)}
-.p-short{background:rgba(234,57,67,.15);color:var(--short)}
-.p-mixed{background:rgba(138,147,160,.15);color:var(--muted)}
-.p-warn{background:rgba(240,185,11,.15);color:var(--warn)}
-.p-info{background:rgba(90,169,255,.15);color:var(--info)}
+
+/* ---------- coin list ---------- */
+.coins{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+@media (min-width:760px){.coins{grid-template-columns:repeat(2,1fr)}}
+@media (min-width:1100px){.coins{grid-template-columns:repeat(3,1fr)}}
+.coin{background:var(--ink2);border-radius:var(--r-md);padding:14px 14px 12px;cursor:pointer;border:1px solid transparent;transition:border-color .15s}
+.coin:hover{border-color:var(--line)}
+.coin.dim{opacity:.55}
+.coin.open{grid-column:1/-1;border-color:var(--line);cursor:default}
+.coin{scroll-margin-top:58px}
+.coin .top{display:flex;align-items:center;gap:10px}
+.tick{font-stretch:125%;font-weight:800;font-size:23px;letter-spacing:.01em;line-height:1}
+.side{font-size:12px;font-weight:700;padding:3px 8px;border-radius:5px}
+.side.l{color:var(--long);background:rgba(47,211,165,.12)} .side.s{color:var(--short);background:rgba(255,107,107,.12)}
+.side.lean{color:var(--mist);background:rgba(142,153,179,.12);font-weight:600}
+.score{margin-left:auto;text-align:right;line-height:1}
+.score b{font-size:24px;font-weight:800;color:var(--amber);font-stretch:110%}
+.score small{display:block;font-size:11px;color:var(--mist);margin-top:3px}
+.star{background:none;border:0;color:var(--mist);font-size:22px;line-height:1;padding:2px 4px;cursor:pointer}
+.star.on{color:var(--amber)}
+.spark{margin:8px 0 8px;height:46px}
+.spark svg{width:100%;height:46px;display:block}
+.nums{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.nums div{font-size:15px;font-weight:600}
+.nums small{display:block;font-size:11px;color:var(--mist);font-weight:500;margin-top:1px}
+.flags{margin-top:9px;display:flex;flex-wrap:wrap;gap:6px}
+.flag{font-size:12px;color:var(--amber);border:1px solid rgba(255,181,71,.35);border-radius:5px;padding:2px 7px}
+.detail{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);cursor:auto}
+.empty{background:var(--ink2);border-radius:var(--r-md);padding:22px 18px;color:var(--mist)}
+.empty b{color:var(--fog);display:block;font-size:17px;margin-bottom:4px}
+
+/* ---------- shared blocks (trade plan, journal, settings) ---------- */
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.box h4{margin:0 0 8px;font-size:14px;color:var(--fog);font-weight:700}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px}
+.kv span:nth-child(odd){color:var(--mist)}
+.pill{display:inline-block;padding:2px 8px;border-radius:5px;font-size:12px;font-weight:700;margin:1px 3px 1px 0}
+.p-long{background:rgba(47,211,165,.12);color:var(--long)} .p-short{background:rgba(255,107,107,.12);color:var(--short)}
+.p-mixed{background:rgba(142,153,179,.12);color:var(--mist)} .p-warn{background:rgba(255,181,71,.12);color:var(--amber)} .p-info{background:rgba(124,180,255,.12);color:var(--info)}
 .tfs{display:flex;gap:4px}
 .tf{font-size:11px;padding:2px 5px;border-radius:4px;border:1px solid var(--line)}
-.tf.up{color:var(--long);border-color:rgba(22,199,132,.4)}
-.tf.dn{color:var(--short);border-color:rgba(234,57,67,.4)}
-.tf.fl{color:var(--muted)}
-.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+.tf.up{color:var(--long)} .tf.dn{color:var(--short)} .tf.fl{color:var(--mist)}
+button.btn{background:var(--ink3);color:var(--fog);border:0;padding:10px 14px;border-radius:9px;font-weight:600;font-size:14px;cursor:pointer}
+button.btn:disabled{opacity:.5}
+button.small{background:var(--ink3);color:var(--fog);border:0;padding:5px 10px;border-radius:7px;font-size:12px;cursor:pointer}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 6px}
+.actions .sub{flex-basis:100%}
+details.more{margin-top:16px;background:var(--ink2);border-radius:var(--r-md);padding:12px 14px}
+details.more summary{cursor:pointer;font-weight:600;font-size:14px}
+details.more[open] summary{margin-bottom:10px}
+.tablewrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse}
-#tbl{min-width:1280px}
-th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
-th{background:var(--panel);color:var(--muted);font-weight:500;font-size:12px;cursor:pointer;user-select:none}
-tbody tr.row{cursor:pointer}
-tbody tr.row:hover td{background:var(--panel)}
-tr.dim td{opacity:.45}
-tr.detail td{background:var(--panel);white-space:normal;padding:14px 16px}
-.dwrap{position:sticky;left:16px;width:min(100%, calc(100vw - 96px))}
+#tbl{min-width:1180px}
+th,td{padding:8px 9px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap;font-size:13px}
+th{color:var(--mist);font-weight:500;cursor:pointer}
+tr.dim td{opacity:.5} tr.row{cursor:pointer}
+tr.detail td{white-space:normal}
+.dwrap{position:sticky;left:0;width:min(100%,calc(100vw - 60px))}
 td.num,th.num{text-align:right}
-.score{display:flex;align-items:center;gap:8px}
-.bar{width:54px;height:6px;background:var(--panel2);border-radius:3px;overflow:hidden}
-.bar i{display:block;height:100%;background:var(--accent)}
-.up{color:var(--long)} .dn{color:var(--short)} .warn{color:var(--warn)}
-a{color:var(--accent);text-decoration:none}
-a:hover{text-decoration:underline}
-.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:16px 0 10px}
-.toolbar .sub{margin-right:auto}
-.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
-.box h4{margin:0 0 8px;font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;font-size:13px}
-.kv span:nth-child(odd){color:var(--muted)}
-.charts{display:grid;grid-template-columns:repeat(auto-fill,minmax(520px,1fr));gap:14px;margin-top:10px}
-.chart{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.chart .hd{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line)}
+.bar{width:44px;height:5px;background:var(--ink3);border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle;margin-left:6px}
+.bar i{display:block;height:100%;background:var(--amber)}
+.charts{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr));gap:12px;margin-top:10px}
+.chart{background:var(--ink2);border-radius:var(--r-md);overflow:hidden}
+.chart .hd{display:flex;justify-content:space-between;align-items:center;padding:8px 12px}
 .chart .tv{height:420px}
-.legend{color:var(--muted);font-size:12px;margin-top:22px;line-height:1.7}
-.legend b{color:var(--text)}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
-.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
-.stat .v{font-size:22px;font-weight:700}
-#jtbl{min-width:1000px}
-[hidden]{display:none!important}
-@media (max-width:640px){header,main,nav{padding-left:16px;padding-right:16px}.charts{grid-template-columns:1fr}}
+.legend{color:var(--mist);font-size:13px;line-height:1.65}
+.legend b{color:var(--fog)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.stat{background:var(--ink2);border-radius:var(--r-md);padding:12px 14px}
+.stat .v{font-size:24px;font-weight:800;font-stretch:110%}
+#jtbl{min-width:820px}
+.set{background:var(--ink2);border-radius:var(--r-md);padding:14px}
+.field{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.field:last-of-type{border-bottom:0}
+.field input[type=number]{width:84px;background:var(--ink);border:1px solid var(--line);color:var(--fog);padding:8px;border-radius:8px;font-size:15px;text-align:right}
+.field input[type=checkbox]{width:20px;height:20px;accent-color:var(--amber)}
+label.ctl{display:flex;gap:6px;align-items:center}
+
+/* ---------- thumb dock ---------- */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:6;background:rgba(14,21,36,.94);backdrop-filter:blur(8px);border-top:1px solid var(--line);
+  padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center}
+.dock .msg{flex:1;font-size:13px;color:var(--mist);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dock .msg b{color:var(--fog)}
+#scanBtn{background:var(--fog);color:var(--ink);border:0;border-radius:11px;padding:12px 20px;font-weight:800;font-size:15px;cursor:pointer}
+#scanBtn:disabled{opacity:.6}
+/* keep header, tabs and dock aligned with the content column on wide screens */
+.mood,.dock{padding-left:max(18px,calc((100vw - 1180px)/2 + 14px));padding-right:max(18px,calc((100vw - 1180px)/2 + 14px))}
+nav{padding-left:max(10px,calc((100vw - 1180px)/2 + 14px));padding-right:max(10px,calc((100vw - 1180px)/2 + 14px))}
+@media (min-width:760px){nav button{flex:0 0 auto;padding-left:18px;padding-right:18px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
-<header>
-  <div>
-    <h1>Morning <span>Futures</span> Scanner <span class="sub">v3 · Telegram</span></h1>
-    <div class="sub">Binance USDT-M perps · EMA 9/21 (15m) · 20/50 (1h) · 50/200 (4h) · volume · OI · funding · taker flow · vs BTC</div>
-  </div>
-  <div class="controls">
-    <label class="ctl">Top movers <input id="nMovers" type="number" value="30" min="5" max="80"></label>
-    <label class="ctl">Min 24h vol $M <input id="minVol" type="number" value="20" min="0"></label>
-    <label class="ctl"><input id="incDump" type="checkbox" checked> losers too</label>
-    <label class="ctl"><input id="auto" type="checkbox"> auto-rescan every <input id="autoMin" type="number" value="15" min="5" style="width:52px"> min</label>
-    <button class="primary" id="scanBtn">Scan market</button>
-  </div>
+<header class="mood" id="mood" data-state="mixed">
+  <div class="when" id="when">Morning scan</div>
+  <h1 id="moodTitle">Tap Scan to read the market.</h1>
+  <p id="moodText">The scanner checks the top movers on Binance futures against your rules: EMAs on 15m, 1h and 4h, volume, open interest and BTC.</p>
+  <div class="leadrow" id="leaders"></div>
 </header>
 <nav>
   <button class="on" data-tab="scan">Scanner</button>
   <button data-tab="journal">Journal</button>
-  <button data-tab="settings">Risk settings</button>
+  <button data-tab="settings">Settings</button>
 </nav>
 
 <main id="tab-scan">
-  <div class="status" id="status">Press “Scan market” to run this morning’s scan.</div>
-  <div class="leaders" id="leaders"></div>
-  <div class="tablewrap"><table id="tbl" hidden>
-    <thead><tr>
-      <th>✓</th><th data-k="sym">Coin</th><th data-k="score">Score</th><th data-k="dir">Setup</th>
-      <th>EMA 15m · 1h · 4h</th><th>4h chart (10 days)</th><th data-k="chg" class="num">24h %</th><th data-k="qv" class="num">24h vol</th>
-      <th data-k="spike" class="num">Vol spike</th><th data-k="oiCh4" class="num">OI 4h</th><th data-k="funding" class="num">Funding</th>
-      <th data-k="taker" class="num">Taker B/S</th><th data-k="lsr" class="num">L/S acct</th><th data-k="rs4" class="num">vs BTC 4h</th>
-      <th data-k="ext" class="num">Stretch</th><th>Flags</th>
-    </tr></thead>
-    <tbody></tbody>
-  </table></div>
+  <div class="filters" id="filters" hidden>
+    <button data-f="clean" class="on"><span id="nClean">0</span>Clean</button>
+    <button data-f="full"><span id="nFull">0</span>All setups</button>
+    <button data-f="all"><span id="nAll">0</span>Everything</button>
+  </div>
+  <div class="status" id="status"></div>
+  <ol class="coins" id="coins"></ol>
 
-  <div class="toolbar" id="toolbar" hidden>
-    <div class="sub">Click a row for the 4h chart and trade plan. Auto-ticked = full setups scoring 60+ with no warning flags (logged to the Journal). You can still tick any coin by hand.</div>
-    <button id="chartsBtn">Show charts</button>
-    <button id="openBtn">Open in TradingView tabs</button>
-    <button id="wlBtn">Download TradingView watchlist</button>
-    <button id="logBtn">Log ticked to journal</button>
+  <div class="actions" id="toolbar" hidden>
+    <div class="sub" id="wlInfo">Star coins to build today's watchlist.</div>
+    <button class="btn" id="chartsBtn">Show charts</button>
+    <button class="btn" id="openBtn">Open in TradingView</button>
+    <button class="btn" id="wlBtn">Download watchlist</button>
+    <button class="btn" id="logBtn">Log to journal</button>
   </div>
   <div class="charts" id="charts"></div>
 
-  <div class="legend">
-    <b>Score (0–100):</b> EMA alignment 35 · OI rising with the move 12 · Volume rank vs other movers 12 · Volume spike 10 · Taker buy/sell flow 10 · Strength vs BTC 8 · BTC alignment 8 · Not crowded (funding + long/short ratio) 5 · <span class="warn">−10 if stretched</span> more than 3 ATR from the 1h EMA 20.<br>
-    <b>Read the flags:</b> <span class="pill p-warn">OI falling</span> move is driven by positions closing (squeeze/fade), not new money ·
-    <span class="pill p-warn">Crowded</span> funding or long/short ratio says one side is packed in, risk of a flush ·
-    <span class="pill p-warn">Stretched</span> late entry, wait for a pullback to the EMA · <span class="pill p-warn">vs BTC</span> trading against the market leader.<br>
-    This is a filter that applies your rules faster — it does not predict price. Confirm on the chart and size every trade so one loss can’t hurt you.
-  </div>
+  <details class="more"><summary>Table view</summary>
+    <div class="tablewrap"><table id="tbl" hidden>
+      <thead><tr>
+        <th>★</th><th data-k="sym">Coin</th><th data-k="score">Score</th><th data-k="dir">Setup</th>
+        <th>EMA 15m · 1h · 4h</th><th>4h chart</th><th data-k="chg" class="num">24h</th><th data-k="qv" class="num">24h vol</th>
+        <th data-k="spike" class="num">Vol spike</th><th data-k="oiCh4" class="num">OI 4h</th><th data-k="funding" class="num">Funding</th>
+        <th data-k="taker" class="num">Taker B/S</th><th data-k="lsr" class="num">L/S acct</th><th data-k="rs4" class="num">vs BTC 4h</th>
+        <th data-k="ext" class="num">Stretch</th><th>Flags</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </details>
+
+  <details class="more"><summary>How the score works</summary>
+    <div class="legend">
+      <b>Score out of 100.</b> EMA alignment 35, open interest rising with the move 12, volume rank 12, volume spike 10, taker buy/sell flow 10, strength vs BTC 8, BTC alignment 8, not crowded 5. Minus 10 when price is stretched more than 3 ATR from the 1h EMA 20.<br><br>
+      <b>Flags.</b> <span class="flag">OI falling</span> the move comes from positions closing, not new money. <span class="flag">Crowded</span> funding or the long/short ratio shows one side packed in. <span class="flag">Stretched</span> a late entry, wait for a pullback. <span class="flag">vs BTC</span> trading against the market leader.<br><br>
+      <b>Mini chart.</b> The last 10 days on the 4h chart, with the 4h EMA 50 as the faint amber line.<br><br><b>Clean</b> means all three timeframes agree, the score is 60 or more and there are no flags. The scanner filters by your rules; it doesn't predict price. Check the chart and size each trade so one loss can't hurt you.
+    </div>
+  </details>
 </main>
 
 <main id="tab-journal" hidden>
-  <div class="toolbar" style="margin-top:0">
-    <div class="sub">Every scan logs its auto-ticked picks once per coin per day. “Check results” looks at what price did after 4h and 24h, and whether the planned stop or first target was hit first. <b>To log your Binance trades, send the export file (.zip or .csv) in the bot chat with 📎 → File — not here.</b></div>
-    <button class="primary" id="evalBtn">Check results</button>
-    <button id="expBtn">Back up scanner journal</button>
-    <button id="impBtn">Restore backup</button><input type="file" id="impFile" accept=".json" hidden>
-    <button id="clrBtn">Clear</button>
+  <div class="stats" id="jstats"></div>
+  <div class="actions" style="margin-top:0">
+    <div class="sub">Each scan logs its clean picks once per coin per day. Check results looks at what price did after 4h and 24h, and whether the stop or first target came first. Your Binance trades go to the bot chat with 📎 → File.</div>
+    <button class="btn" id="evalBtn">Check results</button>
+    <button class="btn" id="expBtn">Back up journal</button>
+    <button class="btn" id="impBtn">Restore backup</button><input type="file" id="impFile" accept=".json" hidden>
+    <button class="btn" id="clrBtn">Clear</button>
   </div>
   <div class="status" id="jstatus"></div>
-  <div class="stats" id="jstats"></div>
   <div class="tablewrap"><table id="jtbl">
     <thead><tr><th>Logged</th><th>Coin</th><th>Setup</th><th class="num">Score</th><th class="num">Entry</th><th class="num">+4h</th><th class="num">+24h</th><th class="num">Best</th><th class="num">Worst</th><th>Outcome</th><th></th></tr></thead>
     <tbody></tbody>
@@ -153,26 +218,36 @@ a:hover{text-decoration:underline}
 </main>
 
 <main id="tab-settings" hidden>
-  <div class="grid3" style="max-width:900px">
-    <div class="box">
-      <h4>Account</h4>
-      <label class="ctl" style="margin-bottom:10px">Futures account size (USDT) <input id="acct" type="number" value="500" min="1" style="width:100px"></label>
-      <label class="ctl">Risk per trade (%) <input id="riskPct" type="number" value="1" min="0.1" step="0.1"></label>
-      <p class="sub">The trade plan sizes each position so hitting the stop loses only this % of the account.</p>
+  <div class="grid3">
+    <div class="set box">
+      <h4>Your account</h4>
+      <label class="field">Futures account (USDT) <input id="acct" type="number" value="500" min="1"></label>
+      <label class="field">Risk per trade (%) <input id="riskPct" type="number" value="1" min="0.1" step="0.1"></label>
+      <p class="sub">Each trade plan sizes the position so hitting the stop loses only this share of the account.</p>
     </div>
-    <div class="box">
-      <h4>Stop & targets</h4>
-      <label class="ctl" style="margin-bottom:10px">Stop distance (× 1h ATR) <input id="atrMult" type="number" value="1.5" min="0.5" step="0.1"></label>
-      <label class="ctl" style="margin-bottom:10px">Target 1 (R) <input id="t1R" type="number" value="1.5" min="0.5" step="0.5"></label>
-      <label class="ctl">Target 2 (R) <input id="t2R" type="number" value="3" min="1" step="0.5"></label>
+    <div class="set box">
+      <h4>Stop and targets</h4>
+      <label class="field">Stop distance (× 1h ATR) <input id="atrMult" type="number" value="1.5" min="0.5" step="0.1"></label>
+      <label class="field">Target 1 (R) <input id="t1R" type="number" value="1.5" min="0.5" step="0.5"></label>
+      <label class="field">Target 2 (R) <input id="t2R" type="number" value="3" min="1" step="0.5"></label>
     </div>
-    <div class="box">
-      <h4>Alerts</h4>
-      <p class="sub">With auto-rescan on, you get a sound and a desktop notification when a coin newly turns into a full LONG/SHORT setup with score ≥ 60. Keep this tab open.</p>
+    <div class="set box">
+      <h4>What to scan</h4>
+      <label class="field">Top movers <input id="nMovers" type="number" value="30" min="5" max="80"></label>
+      <label class="field">Min 24h volume ($M) <input id="minVol" type="number" value="20" min="0"></label>
+      <label class="field">Include top losers (shorts) <input id="incDump" type="checkbox" checked></label>
+      <label class="field">Rescan automatically <input id="auto" type="checkbox"></label>
+      <label class="field">Every (minutes) <input id="autoMin" type="number" value="15" min="5"></label>
+      <p class="sub">With automatic rescans on, you get a sound and a notification when a coin turns into a clean setup. Keep this page open.</p>
       <button id="notifBtn" class="small">Allow notifications</button>
     </div>
   </div>
 </main>
+
+<div class="dock">
+  <div class="msg" id="dockMsg">Ready when you are.</div>
+  <button id="scanBtn">Scan</button>
+</div>
 
 <script>
 const API = 'https://fapi.binance.com';
@@ -338,10 +413,10 @@ function candleSVG(c4, w, h, opts = {}){
   const cid = 'clip' + Math.random().toString(36).slice(2,8);
   let s = opts.big
     ? `<svg viewBox="0 0 ${w} ${h}" width="100%" style="display:block;height:auto"><defs><clipPath id="${cid}"><rect x="0" y="0" width="${w-right}" height="${h}"/></clipPath></defs>`
-    : `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="display:block">`;
+    : `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" preserveAspectRatio="none" style="display:block">`;
   if (opts.big) for (let i=0;i<=4;i++){
     const v = lo + (hi-lo)*i/4, yy = y(v).toFixed(1);
-    s += `<line x1="${pad}" x2="${w-right}" y1="${yy}" y2="${yy}" stroke="var(--line)" stroke-width="1"/><text x="${w-right+6}" y="${+yy+4}" fill="var(--muted)" font-size="10" font-family="JetBrains Mono,monospace">${fmtPx(v)}</text>`;
+    s += `<line x1="${pad}" x2="${w-right}" y1="${yy}" y2="${yy}" stroke="var(--line)" stroke-width="1"/><text x="${w-right+6}" y="${+yy+4}" fill="var(--muted)" font-size="10" font-family="Archivo,sans-serif">${fmtPx(v)}</text>`;
   }
   for (let i=0;i<n;i++){
     const up = c4.c[i] >= c4.o[i], col = up ? 'var(--long)' : 'var(--short)';
@@ -361,7 +436,7 @@ function candleSVG(c4, w, h, opts = {}){
     lv.forEach(L => {
       s += `<line x1="${pad}" x2="${w-right}" y1="${L.yy.toFixed(1)}" y2="${L.yy.toFixed(1)}" stroke="${L.col}" stroke-dasharray="5 4" stroke-width="1.2"/>`;
       s += `<rect x="${w-right+2}" y="${(L.ly-7).toFixed(1)}" width="${right-4}" height="14" rx="3" fill="var(--panel)"/>`;
-      s += `<text x="${w-right+6}" y="${(L.ly+4).toFixed(1)}" fill="${L.col}" font-size="10" font-weight="700" font-family="JetBrains Mono,monospace">${L.lab} ${fmtPx(L.v)}</text>`;
+      s += `<text x="${w-right+6}" y="${(L.ly+4).toFixed(1)}" fill="${L.col}" font-size="10" font-weight="700" font-family="Archivo,sans-serif">${L.lab} ${fmtPx(L.v)}</text>`;
     });
   }
   return s + '</svg>';
@@ -482,7 +557,7 @@ SET_IDS.forEach(id => { if (saved[id] != null) $('#'+id).value = saved[id]; $('#
 if (saved.incDump != null) $('#incDump').checked = saved.incDump;
 function saveSettings(){
   const o = {}; SET_IDS.forEach(id => o[id] = +$('#'+id).value); o.incDump = $('#incDump').checked;
-  store.set('mfs_settings', o); if (last) renderTable();
+  store.set('mfs_settings', o); if (last){ renderCoins(); renderTable(); }
 }
 $('#incDump').onchange = saveSettings;
 const S = () => ({ acct:+$('#acct').value||0, riskPct:+$('#riskPct').value||1, atrMult:+$('#atrMult').value||1.5, t1R:+$('#t1R').value||1.5, t2R:+$('#t2R').value||3 });
@@ -499,7 +574,7 @@ const tvSym = s => `BINANCE:${s}.P`;
 const tvUrl = s => `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSym(s))}`;
 const cgUrl = s => `https://www.coinglass.com/currencies/${s.replace(/USDT$/,'').replace(/^1000+/,'')}`;
 const fmtVol = v => v >= 1e9 ? (v/1e9).toFixed(2)+'B' : (v/1e6).toFixed(0)+'M';
-const fmtP = p => p >= 100 ? p.toFixed(2) : p >= 1 ? p.toFixed(4) : p.toPrecision(4);
+const fmtP = p => p >= 1000 ? p.toLocaleString('en-US', {maximumFractionDigits:1}) : p >= 100 ? p.toFixed(2) : p >= 1 ? p.toFixed(4) : p.toPrecision(4);
 const sgn = (v, d=2, suf='%') => v == null ? '<span class="sub">–</span>' : `<span class="${v>=0?'up':'dn'}">${v>=0?'+':''}${v.toFixed(d)}${suf}</span>`;
 const tfCell = tr => `<div class="tfs">${tr.map((t,i)=>`<span class="tf ${t>0?'up':t<0?'dn':'fl'}">${TFS[i].tf} ${t>0?'▲':t<0?'▼':'–'}</span>`).join('')}</div>`;
 const setup = c => c.full
@@ -508,28 +583,105 @@ const setup = c => c.full
 const flagHtml = c => c.flags.map(f => `<span class="pill p-warn">${f}</span>`).join('') || '<span class="sub">–</span>';
 const fundCell = f => { if (f == null) return '<span class="sub">–</span>'; const p = f*100; return `<span class="${Math.abs(p)>=0.05?'warn':''}">${p.toFixed(4)}%</span>`; };
 
+function moodOf(t){ const s = t.reduce((x,y)=>x+y,0); return s===3 ? 'bull' : s===-3 ? 'bear' : 'mixed'; }
+const arrows = t => t.map(x => x>0 ? '▲' : x<0 ? '▼' : '–').join('');
 function renderLeaders(L){
-  $('#leaders').innerHTML = Object.values(L).map(b => {
-    const s = b.trends.reduce((x,y)=>x+y,0);
-    const lab = s===3?'<span class="pill p-long">BULLISH</span>':s===-3?'<span class="pill p-short">BEARISH</span>':'<span class="pill p-mixed">MIXED</span>';
-    return `<div class="lead">
-      <div><div class="sub">${b.sym==='BTCUSDT'?'Market leader':'Second leader'}</div><div class="big mono">${b.sym.replace('USDT','')} ${fmtP(b.price)}</div></div>
-      <div><div class="sub">24h</div><div class="mono">${sgn(b.chg)}</div></div>
-      <div><div class="sub">OI 4h</div><div class="mono">${sgn(b.oiCh4)}</div></div>
-      <div><div class="sub">EMAs</div>${tfCell(b.trends)}</div>
-      <div>${lab}</div>
-      <div><a href="${tvUrl(b.sym)}" target="_blank" rel="noopener">chart ↗</a></div></div>`;
-  }).join('');
+  const btc = L.BTCUSDT, eth = L.ETHUSDT, m = moodOf(btc.trends), me = eth ? moodOf(eth.trends) : m;
+  const title = { bull:'BTC is rising on every timeframe.', bear:'BTC is falling on every timeframe.', mixed:'BTC has no clear direction.' }[m];
+  const text = m === 'bull'
+    ? (me === 'bull' ? 'ETH agrees. Longs have the market behind them today; shorts need extra care.' : 'ETH is not fully with it. Favour longs, but keep size modest.')
+    : m === 'bear'
+    ? (me === 'bear' ? 'ETH agrees. Shorts have the market behind them today; longs need extra care.' : 'ETH is not fully with it. Favour shorts, but keep size modest.')
+    : 'The 15m, 1h and 4h EMAs disagree. Look for coins moving on their own, and take smaller positions.';
+  const mood = $('#mood'); mood.dataset.state = m;
+  $('#moodTitle').textContent = title; $('#moodText').textContent = text;
+  $('#when').textContent = new Date().toLocaleDateString([], { weekday:'long', day:'numeric', month:'long' }) + ', ' + new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+  $('#leaders').innerHTML = Object.values(L).map(b => `<div class="lead">
+      <b>${b.sym.replace('USDT','')}</b><span>${fmtP(b.price)}</span>${sgn(b.chg)}
+      <span class="tfd ${moodOf(b.trends)==='bull'?'up':moodOf(b.trends)==='bear'?'dn':''}" title="15m 1h 4h">${arrows(b.trends)}</span>
+      <a href="${tvUrl(b.sym)}" target="_blank" rel="noopener">Chart</a></div>`).join('');
+  try { const tg = window.Telegram && window.Telegram.WebApp; if (tg && tg.initData) tg.setHeaderColor(getComputedStyle(mood).backgroundColor); } catch(e){}
 }
+
+/* ---- coin rows ---- */
+function sparkSVG(c4, dir){
+  if (!c4 || !c4.c || c4.c.length < 2) return '';
+  const v = c4.c, W = 340, H = 46, pad = 3, lo = Math.min(...v), hi = Math.max(...v), span = (hi - lo) || 1;
+  const x = i => (i / (v.length - 1)) * W, y = p => pad + (hi - p) / span * (H - pad*2);
+  const pts = v.map((p,i) => `${x(i).toFixed(1)},${y(p).toFixed(1)}`).join(' ');
+  const col = v[v.length-1] >= v[0] ? 'var(--long)' : 'var(--short)';
+  const e = (c4.e1 || []).map((p,i) => p == null ? null : `${x(i).toFixed(1)},${y(Math.min(hi, Math.max(lo, p))).toFixed(1)}`).filter(Boolean).join(' ');
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <polygon points="0,${H} ${pts} ${W},${H}" fill="${col}" opacity=".10"/>
+    ${e ? `<polyline points="${e}" fill="none" stroke="var(--amber)" stroke-width="1" opacity=".55" vector-effect="non-scaling-stroke"/>` : ''}
+    <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.8" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+  </svg>`;
+}
+let filter = 'clean';
+const isClean = c => c.full && c.score >= 60 && !['Stretched','Crowded','OI falling'].some(f => c.flags.includes(f));
+function visibleCoins(){
+  if (!last) return [];
+  const list = filter === 'clean' ? last.coins.filter(isClean) : filter === 'full' ? last.coins.filter(c => c.full) : last.coins;
+  return [...list].sort((a,b) => b.score - a.score);
+}
+function coinHtml(c){
+  const fpct = c.funding == null ? null : c.funding*100;
+  return `<li class="coin ${c.full?'':'dim'} ${open===c.sym?'open':''}" data-s="${c.sym}">
+    <div class="top">
+      <span class="tick">${c.sym.replace('USDT','')}</span>
+      ${c.full ? `<span class="side ${c.dir>0?'l':'s'}">${c.dir>0?'Long':'Short'}</span>` : `<span class="side lean">Leans ${c.dir>0?'long':'short'}</span>`}
+      <div class="score"><b>${c.score}</b><small>score</small></div>
+      <button class="star ${c.checked?'on':''}" data-star="${c.sym}" aria-label="${c.checked?'Remove from':'Add to'} watchlist" aria-pressed="${!!c.checked}">${c.checked?'★':'☆'}</button>
+    </div>
+    <div class="spark" aria-hidden="true">${sparkSVG(c.c4, c.dir)}</div>
+    <div class="nums">
+      <div>${sgn(c.chg,1)}<small>24h</small></div>
+      <div>${c.spike.toFixed(1)}×<small>Volume</small></div>
+      <div>${sgn(c.oiCh4,1)}<small>OI 4h</small></div>
+      <div class="${fpct!=null && Math.abs(fpct)>=0.05?'warn':''}">${fpct==null?'–':fpct.toFixed(3)+'%'}<small>Funding</small></div>
+    </div>
+    ${c.flags.length ? `<div class="flags">${c.flags.map(f=>`<span class="flag">${f}</span>`).join('')}</div>` : ''}
+    ${open===c.sym ? `<div class="detail">${detailHtml(c)}</div>` : ''}
+  </li>`;
+}
+function renderCoins(){
+  if (!last) return;
+  const n = { clean: last.coins.filter(isClean).length, full: last.coins.filter(c => c.full).length, all: last.coins.length };
+  $('#nClean').textContent = n.clean; $('#nFull').textContent = n.full; $('#nAll').textContent = n.all;
+  document.querySelectorAll('#filters button').forEach(b => b.classList.toggle('on', b.dataset.f === filter));
+  const list = visibleCoins();
+  $('#coins').innerHTML = list.length ? list.map(coinHtml).join('') :
+    `<li class="empty"><b>${filter==='clean' ? 'No clean setups right now.' : 'Nothing here.'}</b>${filter==='clean' ? 'Nothing passes every rule at the moment. Check “All setups” for flagged coins, or rescan later.' : 'Try another filter.'}</li>`;
+  const w = selected().length;
+  $('#wlInfo').textContent = w ? `${w} coin${w>1?'s':''} on today's watchlist.` : 'Star coins to build today’s watchlist.';
+}
+document.addEventListener('click', e => {
+  const star = e.target.closest('[data-star]');
+  if (star){
+    e.stopPropagation();
+    const c = last.coins.find(x => x.sym === star.dataset.star); c.checked = !c.checked;
+    haptic('light'); renderCoins(); if (!$('#tbl').hidden) renderTable(); return;
+  }
+  const f = e.target.closest('#filters button');
+  if (f){ filter = f.dataset.f; open = null; haptic('light'); renderCoins(); return; }
+  const li = e.target.closest('li.coin');
+  if (li && !e.target.closest('.detail')){
+    open = open === li.dataset.s ? null : li.dataset.s; haptic('light'); renderCoins();
+    if (open){ const el = document.querySelector(`li.coin[data-s="${open}"]`); if (el) el.scrollIntoView({ block:'start', behavior:'smooth' }); }
+  }
+});
+function haptic(k){ try { window.Telegram.WebApp.HapticFeedback.impactOccurred(k); } catch(e){} }
+
+const chartW = () => Math.round(Math.min(1000, Math.max(320, ((document.querySelector('main:not([hidden])') || document.body).clientWidth || 900) - 40)));
 function detailHtml(c){
   const p = plan(c, S());
   const ptsRows = Object.entries({ 'EMA alignment':c.pts.ema, 'OI with move':c.pts.oi, 'Volume rank':c.pts.volRank, 'Volume spike':c.pts.spike,
     'Taker flow':c.pts.taker, 'vs BTC':c.pts.rs, 'BTC alignment':c.pts.btc, 'Not crowded':c.pts.crowd, 'Stretch penalty':c.pts.stretch })
     .map(([k,v]) => `<span>${k}</span><span class="mono">${v.toFixed(1)}</span>`).join('');
-  return `<div class="box" style="margin-bottom:16px"><h4>${c.sym} · 4h · last 10 days &nbsp;<span style="color:var(--accent)">— EMA 50</span> &nbsp;<span style="color:var(--info)">— EMA 200</span></h4>
-    <div style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px">${candleSVG(c.c4, 1000, 260, { big:true, entry:p.entry, stop:p.stop, t1:p.t1 })}</div></div>
+  return `<div class="box" style="margin-bottom:16px"><h4>Last 10 days on the 4h chart <span class="sub" style="font-weight:500">&nbsp;<span style="color:var(--amber)">EMA 50</span>&nbsp; <span style="color:var(--info)">EMA 200</span></span></h4>
+    <div style="background:var(--ink);border-radius:8px;padding:6px">${candleSVG(c.c4, chartW(), chartW() < 600 ? 250 : 270, { big:true, entry:p.entry, stop:p.stop, t1:p.t1 })}</div></div>
     <div class="grid3">
-    <div class="box"><h4>Trade plan (${c.dir>0?'long':'short'})</h4><div class="kv mono">
+    <div class="box"><h4>Trade plan if you go ${c.dir>0?'long':'short'}</h4><div class="kv mono">
       <span>Entry ≈</span><span>${fmtP(p.entry)}</span>
       <span>Stop</span><span class="dn">${fmtP(p.stop)} (${p.stopPct.toFixed(2)}%)</span>
       <span>Target 1</span><span class="up">${fmtP(p.t1)} (${S().t1R}R)</span>
@@ -546,8 +698,8 @@ function detailHtml(c){
       <span>Price 4h</span><span>${sgn(c.ch4)}</span>
       <span>BTC correlation</span><span>${c.corr.toFixed(2)}</span>
       <span>Stretch from EMA20</span><span>${c.ext.toFixed(1)} ATR</span></div></div>
-    <div class="box"><h4>Score breakdown · ${c.score}</h4><div class="kv">${ptsRows}</div>
-      <p style="margin-top:10px"><a href="${tvUrl(c.sym)}" target="_blank" rel="noopener">TradingView ↗</a> &nbsp; <a href="${cgUrl(c.sym)}" target="_blank" rel="noopener">CoinGlass (liquidations) ↗</a></p></div>
+    <div class="box"><h4>Why it scores ${c.score}</h4><div class="kv">${ptsRows}</div>
+      <p style="margin-top:10px"><a href="${tvUrl(c.sym)}" target="_blank" rel="noopener">Open in TradingView</a> &nbsp; <a href="${cgUrl(c.sym)}" target="_blank" rel="noopener">Liquidations on CoinGlass</a></p></div>
   </div>`;
 }
 function renderTable(){
@@ -576,7 +728,7 @@ function renderTable(){
     ${open===c.sym ? `<tr class="detail"><td colspan="16"><div class="dwrap">${detailHtml(c)}</div></td></tr>` : ''}`).join('');
   document.querySelectorAll('.pick').forEach(cb => {
     cb.onclick = e => e.stopPropagation();
-    cb.onchange = () => { last.coins.find(c => c.sym === cb.value).checked = cb.checked; };
+    cb.onchange = () => { last.coins.find(c => c.sym === cb.value).checked = cb.checked; renderCoins(); };
   });
   document.querySelectorAll('tr.row').forEach(tr => tr.onclick = () => { open = open === tr.dataset.s ? null : tr.dataset.s; renderTable(); });
 }
@@ -669,10 +821,10 @@ $('#clrBtn').onclick = () => { if (confirm('Delete the whole journal? Export fir
 /* scanning */
 async function runScan(){
   const btn = $('#scanBtn'), st = $('#status');
-  btn.disabled = true; st.className = 'status'; st.textContent = 'Fetching Binance futures market…';
+  btn.disabled = true; btn.textContent = 'Scanning…'; st.className = 'status'; st.textContent = ''; $('#dockMsg').textContent = 'Fetching Binance futures…';
   try {
     const prevChecked = new Set(selected().map(c => c.sym));
-    last = await scan({ n:+$('#nMovers').value||30, minVol:+$('#minVol').value||0, incDump:$('#incDump').checked }, m => st.textContent = m);
+    last = await scan({ n:+$('#nMovers').value||30, minVol:+$('#minVol').value||0, incDump:$('#incDump').checked }, m => $('#dockMsg').textContent = m);
     let picked = 0;
     last.coins.forEach(c => {
       // auto-pick only clean setups: full alignment, score 60+, no warning flags
@@ -680,17 +832,19 @@ async function runScan(){
       c.checked = prevChecked.has(c.sym) || (c.full && c.score >= 60 && clean && picked++ < 6);
     });
     renderLeaders(last.leaders); renderTable();
-    $('#tbl').hidden = false; $('#toolbar').hidden = false;
+    $('#tbl').hidden = false; $('#toolbar').hidden = false; $('#filters').hidden = false;
+    if (filter === 'clean' && !last.coins.some(isClean)) filter = 'full';
+    renderCoins();
     const added = logPicks(last.coins.filter(c => c.checked && c.full));
     const full = last.coins.filter(c => c.full);
-    st.textContent = `Scanned ${last.coins.length} movers at ${new Date().toLocaleTimeString()} — ${full.length} full setups, ${selected().length} on today’s watchlist${added?`, ${added} logged to journal`:''}.`;
+    $('#dockMsg').innerHTML = `<b>${last.coins.length} movers</b> scanned at ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}${added?` · ${added} logged`:''}`;
     const strong = full.filter(c => c.score >= 60);
     if (seenFull){ const fresh = strong.filter(c => !seenFull.has(c.sym)); if (fresh.length) notify(fresh); }
     seenFull = new Set([...(seenFull||[]), ...strong.map(c => c.sym)]);
   } catch(e){
-    st.className = 'status err';
+    st.className = 'status err'; $('#dockMsg').textContent = 'Scan failed';
     st.textContent = `Couldn't reach the Binance futures API (${e.message || e}). Check your internet connection; if Binance is blocked on your network, the scan can't run.`;
-  } finally { btn.disabled = false; }
+  } finally { btn.disabled = false; btn.textContent = 'Scan'; }
 }
 $('#scanBtn').onclick = runScan;
 $('#auto').onchange = () => {
@@ -711,7 +865,7 @@ function loadTV(){
 }
 $('#chartsBtn').onclick = async () => {
   const sel = selected(), box = $('#charts');
-  if (!sel.length){ box.innerHTML = '<div class="sub">Tick at least one coin.</div>'; return; }
+  if (!sel.length){ box.innerHTML = '<div class="sub">Star at least one coin first.</div>'; return; }
   try { await loadTV(); } catch(e){ box.innerHTML = `<div class="sub">${e.message}. Use the TradingView links instead.</div>`; return; }
   box.innerHTML = sel.map(c => `<div class="chart"><div class="hd"><b class="mono">${c.sym}</b><span>${setup(c)}${flagHtml(c)}</span></div><div class="tv" id="tv_${c.sym}"></div></div>`).join('');
   sel.forEach(c => new TradingView.widget({
@@ -722,12 +876,12 @@ $('#chartsBtn').onclick = async () => {
   box.scrollIntoView({behavior:'smooth'});
 };
 $('#openBtn').onclick = () => {
-  const sel = selected(); if (!sel.length) return alert('Tick at least one coin.');
+  const sel = selected(); if (!sel.length) return alert('Star at least one coin first.');
   sel.forEach(c => window.open(tvUrl(c.sym), '_blank'));
   if (sel.length > 1) $('#status').textContent = 'If only one tab opened, allow pop-ups for this page and click again.';
 };
 $('#wlBtn').onclick = () => {
-  const sel = selected(); if (!sel.length) return alert('Tick at least one coin.');
+  const sel = selected(); if (!sel.length) return alert('Star at least one coin first.');
   const txt = ['###MORNING SCAN '+new Date().toISOString().slice(0,10), tvSym('BTCUSDT'), tvSym('ETHUSDT'), ...sel.map(c => tvSym(c.sym))].join(',');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt],{type:'text/plain'}));
   a.download = `watchlist-${new Date().toISOString().slice(0,10)}.txt`; a.click();
@@ -740,7 +894,7 @@ $('#logBtn').onclick = () => { const n = logPicks(selected()); $('#status').text
   const tg = window.Telegram && window.Telegram.WebApp;
   if (!tg || !tg.initData) return;            // opened in a normal browser
   tg.ready(); tg.expand();
-  try { tg.setHeaderColor('#14181d'); tg.setBackgroundColor('#0b0e11'); } catch(e){}
+  try { tg.setHeaderColor('#1f2a41'); tg.setBackgroundColor('#0e1524'); tg.setBottomBarColor && tg.setBottomBarColor('#0e1524'); } catch(e){}
   // open TradingView / CoinGlass outside Telegram
   document.addEventListener('click', e => {
     const a = e.target.closest('a[target=_blank]');
