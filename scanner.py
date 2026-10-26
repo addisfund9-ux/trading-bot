@@ -131,13 +131,11 @@ def score(c, btc):
     flags = []
     if bdir == d:
         btc_pts = 8
-    elif abs(c["corr"]) < 0.3:
-        btc_pts = 5.6
-    elif bdir == 0:
-        btc_pts = 4
-    else:
-        btc_pts = 0
+    elif bdir == -d:  # BTC fully against, even if the coin hasn't followed it yet
+        btc_pts = 3 if abs(c["corr"]) < 0.3 else 0
         flags.append("vs BTC")
+    else:
+        btc_pts = 5.6 if abs(c["corr"]) < 0.3 else 4
     oi_pts = 6
     if c["oi_ch4"] is not None:
         with_move = d * c["ch4"] > 0
@@ -157,8 +155,15 @@ def score(c, btc):
     stretched = d * c["ext"] > 3
     if stretched:
         flags.append("Stretched")
+    squeeze = f_pct is not None and abs(f_pct) >= 0.1  # one side being forced out; can snap back
+    if squeeze:
+        flags.append("Squeeze")
+    late = d * c["chg"] >= 20  # already 20%+ in this direction today
+    if late:
+        flags.append("Late")
     pts = (35 * agree / 3 + oi_pts + c["vol_pct"] * 12 + clamp01((c["spike"] - 1) / 2) * 10 + tk_pts
-           + clamp01(d * c["rs4"] / 5) * 8 + btc_pts + crowd_pts + (-10 if stretched else 0))
+           + clamp01(d * c["rs4"] / 5) * 8 + btc_pts + crowd_pts + (-10 if stretched else 0)
+           - (8 if squeeze else 0) - (8 if late else 0))
     return {**c, "dir": d, "full": full, "score": max(0, min(100, round(pts))), "flags": flags}
 
 
@@ -202,7 +207,7 @@ def scan(n=30, min_vol_m=20, include_losers=True, workers=4):
 
 
 def clean_picks(result, k=5, min_score=60):
-    bad = {"Stretched", "Crowded", "OI falling"}
+    bad = {"Stretched", "Crowded", "OI falling", "Squeeze", "Late"}
     return [c for c in result["coins"] if c["full"] and c["score"] >= min_score and not bad & set(c["flags"])][:k]
 
 

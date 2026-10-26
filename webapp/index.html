@@ -155,6 +155,10 @@ label.ctl{display:flex;gap:6px;align-items:center}
 nav{padding-left:max(10px,calc((100vw - 1180px)/2 + 14px));padding-right:max(10px,calc((100vw - 1180px)/2 + 14px))}
 @media (min-width:760px){nav button{flex:0 0 auto;padding-left:18px;padding-right:18px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+li.dropped{list-style:none;border:1px dashed var(--amber);border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:13px;line-height:1.6}
+li.dropped b{display:block;margin-bottom:4px}
+li.dropped .tick{font-size:13px;font-weight:700;margin-right:4px}
+.linkbtn{background:none;border:0;color:var(--info);font:inherit;text-decoration:underline;cursor:pointer;padding:0 2px}
 </style>
 </head>
 <body>
@@ -204,7 +208,7 @@ nav{padding-left:max(10px,calc((100vw - 1180px)/2 + 14px));padding-right:max(10p
   <details class="more"><summary>How the score works</summary>
     <div class="legend">
       <b>Score out of 100.</b> EMA alignment 35, open interest rising with the move 12, volume rank 12, volume spike 10, taker buy/sell flow 10, strength vs BTC 8, BTC alignment 8, not crowded 5. Minus 10 when price is stretched more than 3 ATR from the 1h EMA 20.<br><br>
-      <b>Flags.</b> <span class="flag">OI falling</span> the move comes from positions closing, not new money. <span class="flag">Crowded</span> funding or the long/short ratio shows one side packed in. <span class="flag">Stretched</span> a late entry, wait for a pullback. <span class="flag">vs BTC</span> trading against the market leader.<br><br>
+      <b>Flags.</b> <span class="flag">OI falling</span> the move comes from positions closing, not new money. <span class="flag">Crowded</span> funding or the long/short ratio shows one side packed in. <span class="flag">Stretched</span> a late entry, wait for a pullback. <span class="flag">vs BTC</span> BTC is trending the other way on all timeframes. <span class="flag">Squeeze</span> funding beyond ±0.1%: the move is one side being forced out, and it can snap back fast. <span class="flag">Late</span> already 20%+ in your direction today, so you'd be chasing.<br><br>
       <b>Mini chart.</b> The last 10 days on the 4h chart, with the 4h EMA 50 as the faint amber line.<br><br><b>Clean</b> means all three timeframes agree, the score is 60 or more and there are no flags. The scanner filters by your rules; it doesn't predict price. Check the chart and size each trade so one loss can't hurt you.
     </div>
   </details>
@@ -370,9 +374,8 @@ function scoreCoin(c, btc){
 
   let btcPts;
   if (btcDir === dir) btcPts = 8;
-  else if (Math.abs(c.corr) < 0.3) btcPts = 5.6;
-  else if (btcDir === 0) btcPts = 4;
-  else { btcPts = 0; flags.push('vs BTC'); }
+  else if (btcDir === -dir){ btcPts = Math.abs(c.corr) < 0.3 ? 3 : 0; flags.push('vs BTC'); }  // BTC fully against, even if it hasn't followed yet
+  else btcPts = Math.abs(c.corr) < 0.3 ? 5.6 : 4;
 
   let oiPts = 6;                                           // neutral if no data
   if (c.oiCh4 != null){
@@ -393,6 +396,12 @@ function scoreCoin(c, btc){
 
   const stretched = dir * c.ext > 3;
   if (stretched) flags.push('Stretched');
+  // Squeeze: funding beyond ±0.1% means the move is fuelled by one side being forced out; it can reverse fast
+  const squeeze = fPct != null && Math.abs(fPct) >= 0.1;
+  if (squeeze) flags.push('Squeeze');
+  // Late: already up/down 20%+ in 24h in the trade's direction
+  const late = dir * c.chg >= 20;
+  if (late) flags.push('Late');
 
   const pts = {
     ema: 35*agree/3,
@@ -404,6 +413,7 @@ function scoreCoin(c, btc){
     btc: btcPts,
     crowd: crowdPts,
     stretch: stretched ? -10 : 0,
+    risk: (squeeze ? -8 : 0) + (late ? -8 : 0),
   };
   const score = Math.max(0, Math.min(100, Math.round(Object.values(pts).reduce((a,b)=>a+b,0))));
   return { ...c, dir, full, score, pts, flags };
@@ -664,7 +674,8 @@ function sparkSVG(c4, dir){
   </svg>`;
 }
 let filter = 'clean';
-const isClean = c => c.full && c.score >= 60 && !['Stretched','Crowded','OI falling'].some(f => c.flags.includes(f));
+const CLEAN_BLOCK = ['Stretched','Crowded','OI falling','Squeeze','Late'];
+const isClean = c => c.full && c.score >= 60 && !CLEAN_BLOCK.some(f => c.flags.includes(f));
 function visibleCoins(){
   if (!last) return [];
   const list = filter === 'clean' ? last.coins.filter(isClean) : filter === 'full' ? last.coins.filter(c => c.full) : last.coins;
@@ -698,14 +709,39 @@ function coinHtml(c){
     ${open===c.sym ? `<div class="detail">${detailHtml(c)}</div>` : ''}
   </li>`;
 }
+/* remember what was clean earlier today, so a coin never vanishes without a reason */
+const dayKey = () => 'mfs_clean_' + new Date().toLocaleDateString('en-CA');
+function cleanHistory(){ try { return JSON.parse(localStorage.getItem(dayKey()) || '{}'); } catch(e){ return {}; } }
+function rememberClean(coins){
+  const h = cleanHistory(), t = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  coins.filter(isClean).forEach(c => { h[c.sym] = { first: (h[c.sym]||{}).first || t, last: t, side: c.dir > 0 ? 'long' : 'short' }; });
+  try { localStorage.setItem(dayKey(), JSON.stringify(h)); } catch(e){}
+  return h;
+}
+function whyNotClean(c){
+  if (!c) return 'no longer in the top movers';
+  const r = [];
+  c.trends.forEach((t,i) => { if (t !== c.dir) r.push(`${TFS[i].tf} EMA ${t===0?'flat':'turned'}`); });
+  c.flags.filter(f => CLEAN_BLOCK.includes(f)).forEach(f => r.push(f));
+  if (c.score < 60) r.push(`score ${c.score}`);
+  return r.join(' · ') || 'changed';
+}
+function droppedHtml(){
+  const h = cleanHistory(), out = Object.entries(h).filter(([sym]) => { const c = last.coins.find(x => x.sym === sym); return !c || !isClean(c); });
+  if (!out.length) return '';
+  return `<li class="dropped"><b>Dropped out of Clean today</b>${out.map(([sym,v]) => {
+    const c = last.coins.find(x => x.sym === sym);
+    return `<div><span class="tick">${sym.replace('USDT','')}</span> was clean ${v.side} ${v.first}–${v.last} → now: ${whyNotClean(c)}${c?` <button class="linkbtn" data-goto="${sym}">show</button>`:''}</div>`;
+  }).join('')}</li>`;
+}
 function renderCoins(){
   if (!last) return;
   const n = { clean: last.coins.filter(isClean).length, full: last.coins.filter(c => c.full).length, all: last.coins.length };
   $('#nClean').textContent = n.clean; $('#nFull').textContent = n.full; $('#nAll').textContent = n.all;
   document.querySelectorAll('#filters button').forEach(b => b.classList.toggle('on', b.dataset.f === filter));
   const list = visibleCoins();
-  $('#coins').innerHTML = list.length ? list.map(coinHtml).join('') :
-    `<li class="empty"><b>${filter==='clean' ? 'No clean setups right now.' : 'Nothing here.'}</b>${filter==='clean' ? 'Nothing passes every rule at the moment. Check “All setups” for flagged coins, or rescan later.' : 'Try another filter.'}</li>`;
+  $('#coins').innerHTML = (filter === 'clean' ? droppedHtml() : '') + (list.length ? list.map(coinHtml).join('') :
+    `<li class="empty"><b>${filter==='clean' ? 'No clean setups right now.' : 'Nothing here.'}</b>${filter==='clean' ? 'Nothing passes every rule at the moment. Check “All setups” for flagged coins, or rescan later.' : 'Try another filter.'}</li>`);
   const w = selected().length;
   $('#wlInfo').textContent = w ? `${w} coin${w>1?'s':''} on today's watchlist.` : 'Star coins to build today’s watchlist.';
 }
@@ -716,6 +752,9 @@ document.addEventListener('click', e => {
     const c = last.coins.find(x => x.sym === star.dataset.star); c.checked = !c.checked;
     haptic('light'); renderCoins(); if (!$('#tbl').hidden) renderTable(); return;
   }
+  const go = e.target.closest('[data-goto]');
+  if (go){ filter = 'all'; open = go.dataset.goto; renderCoins();
+    const el = document.querySelector(`li.coin[data-s="${open}"]`); if (el) el.scrollIntoView({ block:'start', behavior:'smooth' }); return; }
   const f = e.target.closest('#filters button');
   if (f){ filter = f.dataset.f; open = null; haptic('light'); renderCoins(); return; }
   const li = e.target.closest('li.coin');
@@ -730,7 +769,7 @@ const chartW = () => Math.round(Math.min(1000, Math.max(320, ((document.querySel
 function detailHtml(c){
   const p = plan(c, S());
   const ptsRows = Object.entries({ 'EMA alignment':c.pts.ema, 'OI with move':c.pts.oi, 'Volume rank':c.pts.volRank, 'Volume spike':c.pts.spike,
-    'Taker flow':c.pts.taker, 'vs BTC':c.pts.rs, 'BTC alignment':c.pts.btc, 'Not crowded':c.pts.crowd, 'Stretch penalty':c.pts.stretch })
+    'Taker flow':c.pts.taker, 'vs BTC':c.pts.rs, 'BTC alignment':c.pts.btc, 'Not crowded':c.pts.crowd, 'Stretch penalty':c.pts.stretch, 'Squeeze / late penalty':c.pts.risk||0 })
     .map(([k,v]) => `<span>${k}</span><span class="mono">${v.toFixed(1)}</span>`).join('');
   return `<div class="box" style="margin-bottom:16px"><h4>Last 10 days on the 4h chart <span class="sub" style="font-weight:500">&nbsp;<span style="color:var(--amber)">EMA 50</span>&nbsp; <span style="color:var(--info)">EMA 200</span></span></h4>
     <div style="background:var(--ink);border-radius:8px;padding:6px">${candleSVG(c.c4, chartW(), chartW() < 600 ? 250 : 270, { big:true, entry:p.entry, stop:p.stop, t1:p.t1 })}</div></div>
@@ -882,12 +921,14 @@ async function runScan(){
     let picked = 0;
     last.coins.forEach(c => {
       // auto-pick only clean setups: full alignment, score 60+, no warning flags
-      const clean = !['Stretched','Crowded','OI falling'].some(f => c.flags.includes(f));
+      const clean = !CLEAN_BLOCK.some(f => c.flags.includes(f));
       c.checked = prevChecked.has(c.sym) || (c.full && c.score >= 60 && clean && picked++ < 6);
     });
     renderLeaders(last.leaders); renderTable();
     $('#tbl').hidden = false; $('#toolbar').hidden = false; $('#filters').hidden = false;
-    if (filter === 'clean' && !last.coins.some(isClean)) filter = 'full';
+    rememberClean(last.coins);
+    const hadClean = Object.keys(cleanHistory()).length;
+    if (filter === 'clean' && !last.coins.some(isClean) && !hadClean) filter = 'full';
     renderCoins();
     const added = logPicks(last.coins.filter(c => c.checked && c.full));
     const full = last.coins.filter(c => c.full);
@@ -941,6 +982,7 @@ $('#wlBtn').onclick = () => {
   a.download = `watchlist-${new Date().toISOString().slice(0,10)}.txt`; a.click();
 };
 $('#logBtn').onclick = () => { const n = logPicks(selected()); $('#status').textContent = n ? `${n} coin(s) logged to the journal.` : 'Those coins are already logged today.'; };
+window.__mfsTest = { isClean, renderCoins, dayKey, setLast: v => { last = v; } };  // used by automated checks only
 }
 
 /* ===== Telegram Mini App glue ===== */
