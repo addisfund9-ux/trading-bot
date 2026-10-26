@@ -1,34 +1,36 @@
 {
   "date": "2026-10-26",
-  "generated_at": "2026-10-25T23:40:00+03:00",
-  "headline": "Your calm trades make money and your revenge trades give it back, so this week's ideas focus on stopping tilt in the moment.",
+  "generated_at": "2026-10-26T07:10:00+03:00",
+  "headline": "No API changes affect the bot this week, so today's ideas make leverage shrink after a loss and match it to each coin's normal noise.",
   "ideas": [
     {
-      "title": "Live tilt guard",
-      "why": "Today's report only catches revenge trades after the fact. With a read-only Binance API key, the bot could message you the moment you open a trade within 15 minutes of a loss or raise leverage, which is when it matters.",
-      "effort": "medium",
-      "area": "discipline"
-    },
-    {
-      "title": "One-tap mood check before the first trade",
-      "why": "Anti-tilt journal apps log mood and discipline each session. A /plan button (calm, rushed, angry, tired) would let the bot show which moods your losing days start with.",
+      "title": "Leverage ceiling that steps down after each loss",
+      "why": "Studies of futures traders find individuals take more risk after morning losses to get back to even. Start the day at a 20× cap and halve it after each loss (20→10→5); /tilt and the report flag any trade above the cap. On 25 Oct you went the other way, up to 40×.",
       "effort": "small",
       "area": "discipline"
     },
     {
-      "title": "Discipline streak in the morning brief",
-      "why": "Count the days in a row with no revenge trades and 8 trades or fewer. A streak is easier to protect than a rule is to remember.",
+      "title": "Liquidation vs noise check on each coin",
+      "why": "Show each coin's 15m ATR as a % of price next to how far liquidation sits at 10×, 20× and 40×. At 40× liquidation is under 2.5% away, so on a coin whose normal 15m candle moves 1%, two ordinary candles can end the trade.",
       "effort": "small",
-      "area": "discipline"
+      "area": "risk"
+    },
+    {
+      "title": "Require OI above its 20-hour average for Clean setups",
+      "why": "The scanner already downloads 25 hours of open interest per coin. Requiring OI to sit above its 20h average, not just be up over 4h, would drop movers in thin, low-participation chop, a filter some 15m EMA + OI scripts use against fake-outs. No extra API calls.",
+      "effort": "small",
+      "area": "scanner"
     }
   ],
-  "watch": [
-    "Telegram restricted Mini App methods to the Mini App's own domain from 20 July 2026. If the Scanner button ever misbehaves, check that the Mini App domain in @BotFather is datradingbot.netlify.app.",
-    "Binance Futures added USDⓈ-margined TradFi perpetuals (stocks and commodities) in June 2026. If they start appearing among the top movers, the scanner may need a crypto-only filter."
-  ],
+  "watch": [],
   "sources": [
-    {"title": "Trading Journal – Anti-Tilt (App Store)", "url": "https://apps.apple.com/app/id6758776390"},
-    {"title": "Bot API 10.2 (BotNews)", "url": "https://tgstat.com/channel/@BotNews/120"},
-    {"title": "Binance Futures TradFi USDⓈ perpetuals (DEXTools)", "url": "https://www.dextools.io/news/binance-futures-tradfi-usds-perpetual-contracts-june-2026-ja"}
+    {"title": "The house money and break-even effects for different types of traders: Evidence from Taiwan futures markets (Huang & Chan, 2014)", "url": "https://ideas.repec.org/a/eee/pacfin/v26y2014icp1-13.html"},
+    {"title": "ATR-based Stop Distance (LuxAlgo)", "url": "https://www.luxalgo.com/library/concept/atr-based-stop-distance/"},
+    {"title": "Leverage and Margin of USDⓈ-M Futures (Binance FAQ)", "url": "https://binance.com/en/support/faq/360033162192"},
+    {"title": "How to Reduce Your Chances of Getting Liquidated (Binance Square)", "url": "https://www.binance.com/en/square/post/1628466"},
+    {"title": "15m EMA 9/15 + OI Flip Signals (TradingView script)", "url": "https://de.tradingview.com/script/FSwOxBJA-15m-EMA-9-15-OI-Flip-Signals"},
+    {"title": "Derivatives Change Log (Binance Developers)", "url": "https://developers.binance.com/docs/derivatives/change-log"},
+    {"title": "Bot API changelog (Telegram)", "url": "https://core.telegram.org/bots/api-changelog.md"},
+    {"title": "python-telegram-bot changelog", "url": "https://docs.python-telegram-bot.org/en/stable/changelog.html"}
   ]
 }
