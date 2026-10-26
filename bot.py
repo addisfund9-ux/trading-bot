@@ -542,7 +542,21 @@ async def morning_brief(ctx, chat_id):
 
 
 async def morning_job(ctx: ContextTypes.DEFAULT_TYPE):
-    await morning_brief(ctx, ctx.job.chat_id)
+    await send_brief_once(ctx, ctx.job.chat_id)
+
+
+async def send_brief_once(ctx, chat_id):
+    """Send today's brief once. Also called every minute after the brief time, so a brief missed while the PC
+    was asleep or offline goes out as soon as it is back (until 18:00; after that, tomorrow's)."""
+    t = today().isoformat()
+    if store.get_setting(con, "last_brief") == t:
+        return
+    store.set_setting(con, "last_brief", t)
+    try:
+        await morning_brief(ctx, chat_id)
+    except Exception:
+        store.set_setting(con, "last_brief", "")       # try again next minute
+        raise
 
 
 async def evening_job(ctx: ContextTypes.DEFAULT_TYPE):
@@ -606,7 +620,15 @@ _STAMP = _code_stamp()
 
 
 async def reload_job(ctx: ContextTypes.DEFAULT_TYPE):
-    """When Claude updates the bot's code, restart so the new version runs (start.bat starts it again)."""
+    """When Claude updates the bot's code, restart so the new version runs (start.bat starts it again).
+    Also catches up a morning brief that was missed while the PC slept."""
+    try:
+        now = datetime.now(TZ)
+        oid = owner_id()
+        if oid and parse_hhmm(MORNING).replace(tzinfo=None) <= now.time().replace(tzinfo=None) < time(18, 0):
+            await send_brief_once(ctx, oid)
+    except Exception:
+        log.exception("brief catch-up failed (will retry)")
     try:
         if _code_stamp() != _STAMP:
             log.info("Code updated — restarting to load the new version.")
@@ -625,6 +647,10 @@ async def post_init(app: Application):
 
 
 async def on_error(update, ctx: ContextTypes.DEFAULT_TYPE):
+    from telegram.error import NetworkError, TimedOut
+    if isinstance(ctx.error, (NetworkError, TimedOut)):
+        log.warning("No connection to Telegram (%s) — retrying automatically.", ctx.error)
+        return
     log.error("Error while handling an update: %s", ctx.error, exc_info=ctx.error)
 
 
