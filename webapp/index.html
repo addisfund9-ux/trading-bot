@@ -990,6 +990,7 @@ window.__mfsTest = { isClean, renderCoins, dayKey, setLast: v => { last = v; } }
   const tg = window.Telegram && window.Telegram.WebApp;
   if (!tg || !tg.initData) return;            // opened in a normal browser
   tg.ready(); tg.expand();
+  try { tg.disableVerticalSwipes && tg.disableVerticalSwipes(); } catch(e){}   // scrolling the table must not minimise the app
   try { tg.setHeaderColor('#1f2a41'); tg.setBackgroundColor('#0e1524'); tg.setBottomBarColor && tg.setBottomBarColor('#0e1524'); } catch(e){}
   // open TradingView / CoinGlass outside Telegram
   document.addEventListener('click', e => {
