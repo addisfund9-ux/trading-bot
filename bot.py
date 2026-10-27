@@ -56,7 +56,9 @@ WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip()
 MAX_HOLD = float(os.getenv("MAX_HOLD_MIN", "10"))
 MAX_LOSSES = int(os.getenv("MAX_LOSSES_PER_COIN", "2"))
 COOLDOWN = float(os.getenv("COOLDOWN_MIN", "15"))            # wait this long after any loss
-MAX_TRADES = int(os.getenv("MAX_TRADES_PER_DAY", "8"))
+# your plan from 27 Oct: at most 3 trades a day, mornings only (PLAN_MAX_TRADES / LAST_ENTRY_TIME override)
+MAX_TRADES = min(int(os.getenv("MAX_TRADES_PER_DAY", "3")), int(os.getenv("PLAN_MAX_TRADES", "3")))
+LAST_ENTRY = os.getenv("LAST_ENTRY_TIME", "12:00").strip() or None
 LOSS_LIMIT = float(os.getenv("DAILY_LOSS_LIMIT", "5"))       # stop after giving back this much from the day's high
 IDEAS_URL = os.getenv("IDEAS_URL", (WEBAPP_URL.rstrip("/") + "/ideas.json") if WEBAPP_URL else "").strip()
 INBOX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox")
@@ -221,11 +223,12 @@ async def rules_cmd(update: Update, ctx):
         f"<b>Your rules</b>\n1. Close any losing trade still open after {MAX_HOLD:.0f} minutes.\n"
         f"2. Stop trading a coin after {MAX_LOSSES} losses in a row on it.\n"
         f"3. After any loss, wait {COOLDOWN:g} minutes before the next trade.\n"
-        f"4. No more than {MAX_TRADES} trades a day.\n"
+        f"4. No more than {MAX_TRADES} trades a day" + (f", and no new trades after {LAST_ENTRY}" if LAST_ENTRY else "") + ".\n"
         f"5. Stop for the day after giving back {LOSS_LIMIT:g} USDT from the day's high.\n"
-        "6. Never raise leverage after a loss.\n\n"
-        "Change them in the .env file (MAX_HOLD_MIN, MAX_LOSSES_PER_COIN, COOLDOWN_MIN, MAX_TRADES_PER_DAY, "
-        "DAILY_LOSS_LIMIT).", parse_mode=ParseMode.HTML)
+        "6. Never raise leverage after a loss.\n"
+        "7. The first broken rule ends the day.\n\n"
+        "Change them in the .env file (MAX_HOLD_MIN, MAX_LOSSES_PER_COIN, COOLDOWN_MIN, PLAN_MAX_TRADES, "
+        "LAST_ENTRY_TIME, DAILY_LOSS_LIMIT).", parse_mode=ParseMode.HTML)
 
 
 @owner_only
@@ -375,7 +378,7 @@ async def scan_cmd(update: Update, ctx):
 BT_RUNNING = {"on": False}
 BINANCE_KEY, BINANCE_SECRET = os.getenv("BINANCE_API_KEY", "").strip(), os.getenv("BINANCE_API_SECRET", "").strip()
 LIVE = guard.Live(BINANCE_KEY, BINANCE_SECRET, cooldown_min=COOLDOWN, max_trades=MAX_TRADES,
-                  loss_limit=LOSS_LIMIT, max_hold_min=MAX_HOLD) if BINANCE_KEY and BINANCE_SECRET else None
+                  loss_limit=LOSS_LIMIT, max_hold_min=MAX_HOLD, last_entry=LAST_ENTRY) if BINANCE_KEY and BINANCE_SECRET else None
 GUARD_STATE = {"told_bad_key": False, "errors": 0}
 
 

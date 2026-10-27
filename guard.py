@@ -86,7 +86,7 @@ def check_key(restr):
 class Guard:
     """Pure rule logic — fed snapshots, returns alert texts. Kept separate from Binance so it can be tested."""
 
-    def __init__(self, cooldown_min=15, max_trades=8, loss_limit=5.0, max_hold_min=10, tz_offset_h=3):
+    def __init__(self, cooldown_min=15, max_trades=3, loss_limit=5.0, max_hold_min=10, tz_offset_h=3, last_entry=None):
         self.cooldown = int(cooldown_min * 60_000)
         self.max_trades, self.loss_limit, self.max_hold = int(max_trades), float(loss_limit), int(max_hold_min * 60_000)
         self.tz = tz_offset_h * 3_600_000
@@ -96,6 +96,8 @@ class Guard:
         self.day = None
         self.opens_today = 0
         self.started = False
+        self.last_entry = last_entry  # "HH:MM" — no new trades after this (None = off)
+        self.closed_today = 0
 
     def _day(self, ms):
         return (ms + self.tz) // 86_400_000
@@ -112,8 +114,8 @@ class Guard:
     def update(self, positions, stops, income, now):
         alerts = []
         if self._day(now) != self.day:
-            self.day, self.opens_today = self._day(now), 0
-            self.sent = {s for s in self.sent if s[0] != "limit" and s[0] != "count"}
+            self.day, self.opens_today, self.closed_today = self._day(now), 0, 0
+            self.sent = {s for s in self.sent if s[0] not in ("limit", "count", "done", "over", "late")}
         cur = {}
         for p in positions:
             amt = float(p["positionAmt"])
@@ -128,6 +130,8 @@ class Guard:
                 pnl = sum(float(x["income"]) for x in income if x.get("symbol") == info["symbol"]
                           and x.get("incomeType") in ("REALIZED_PNL", "COMMISSION") and int(x["time"]) >= info["seen"] - 5_000)
                 self.closed.append({**info, "pnl": pnl, "closed": now})
+                if self.started:
+                    self.closed_today += 1
         self.closed = [c for c in self.closed if now - c["closed"] < 6 * 3_600_000]
         # new positions
         for key, info in cur.items():
@@ -155,8 +159,15 @@ class Guard:
                                   "bigger than the trade you just lost. That's trying to win it back.")
             if self.opens_today > self.max_trades and ("count", self.day) not in self.sent:
                 self.sent.add(("count", self.day))
-                alerts.append(f"🔢 <b>Trade {self.opens_today} today</b> — past your limit of {self.max_trades}. "
-                              "Your best days have fewer trades.")
+                alerts.append(f"🔢 <b>Trade {self.opens_today} today</b> — your plan is {self.max_trades}. Your first "
+                              f"{self.max_trades} trades of the day made money; everything after them lost.")
+            if self.last_entry and ("late", self.day) not in self.sent:
+                hh, mm = map(int, self.last_entry.split(":"))
+                local_min = ((now + self.tz) // 60_000) % 1440
+                if local_min >= hh * 60 + mm:
+                    self.sent.add(("late", self.day))
+                    alerts.append(f"🕛 <b>New trade after {self.last_entry}</b> — your plan is mornings only. "
+                                  "Your afternoons have lost money so far.")
         run, peak = self.day_pnl(income, now)
         if peak - run >= self.loss_limit and ("limit", self.day) not in self.sent:
             self.sent.add(("limit", self.day))
@@ -174,6 +185,16 @@ class Guard:
                 self.sent.add(("hold", key, info["seen"]))
                 alerts.append(f"⌛ <b>{sym} losing after {age // 60_000} min</b> ({info['upnl']:+.2f}) — your rule: close "
                               f"any losing trade still open after {self.max_hold // 60_000} min.")
+        if (self.closed_today >= self.max_trades and not cur and ("done", self.day) not in self.sent
+                and self.opens_today >= 1):
+            self.sent.add(("done", self.day))
+            alerts.append(f"✅ <b>That's {self.closed_today} trades — you're done for today.</b> Close the app. "
+                          "Tomorrow's setups will still be there.")
+        if alerts and any(not a.startswith("✅") for a in alerts) and ("over", self.day) not in self.sent:
+            self.sent.add(("over", self.day))
+            alerts.append("⛔ <b>Rule broken — the day is over.</b> Your trades make money until the first broken rule "
+                          "of the day and lose after it. Close what's open, put a stop on anything you keep, and close "
+                          "the app.")
         self.open, self.started = cur, True
         return alerts
 

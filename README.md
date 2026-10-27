@@ -76,7 +76,8 @@ You'll get a **Scanner** button next to the message box, and an "Open scanner" b
 ## Settings (in `.env`)
 - `MORNING_TIME`, `EVENING_REMINDER`: message times (Addis Ababa time).
 - `MAX_HOLD_MIN`, `MAX_LOSSES_PER_COIN`: your two exit rules.
-- `COOLDOWN_MIN`, `MAX_TRADES_PER_DAY`, `DAILY_LOSS_LIMIT`: your anti-tilt rules (wait after a loss, cap trades per day, stop after giving back this much from the day's high).
+- `COOLDOWN_MIN`, `DAILY_LOSS_LIMIT`: wait this long after a loss; stop after giving back this much from the day's high.
+- `PLAN_MAX_TRADES` (default 3) and `LAST_ENTRY_TIME` (default 12:00): your plan — at most 3 trades a day, mornings only. With the tilt guard on, the bot says "That's 3, you're done" after the third trade, and "Rule broken, day over" the moment you break any rule.
 - `SCAN_TOP`, `SCAN_MIN_VOL_M`: how many movers to scan, and the minimum 24h volume in $M.
 
 After you change `.env`, restart the bot by closing the black window and opening `start.bat` again.
