@@ -22,6 +22,7 @@ import backtest
 import coach
 import guard
 import lessons
+import pump
 import extract
 import importer
 import review
@@ -193,6 +194,7 @@ HELP = (
     "/today · /yesterday · /day 2026-10-24 — reviews\n"
     "/week — last 7 days with a chart\n"
     "/scan — run the scanner now\n"
+    "/pumptest — test the pump trigger (30m/1h/4h direction + 1m/5m/15m EMA 9/21) on 14 days of 1-minute data\n"
     "/backtest — would the scanner's Clean signals have made money? (last 28 days, ~10 min; /backtest 14)\n"
     "/morning — send the morning brief now\n"
     "/guard — live tilt guard status (warns you while you trade; needs a read-only Binance key)\n"
@@ -447,6 +449,30 @@ async def run_backtest(ctx, chat_id, days=28):
         await ctx.bot.send_message(chat_id, f"Backtest failed: {e}")
     finally:
         BT_RUNNING["on"] = False
+
+
+async def run_pump_test(ctx, chat_id, days=14):
+    if BT_RUNNING["on"]:
+        await ctx.bot.send_message(chat_id, "A test is already running — the result will arrive here.")
+        return
+    BT_RUNNING["on"] = True
+    try:
+        await ctx.bot.send_message(chat_id, f"🚀 Testing your pump trigger on the last {days} days of 1-minute candles. "
+                                            "It downloads a lot, so give it 20–40 minutes. Keep the PC awake.")
+        res = await asyncio.to_thread(pump.run, days, 100, lambda m: log.info("pump: %s", m))
+        await send(ctx, chat_id, pump.text(res))
+        log.info("pump test done: %s triggers", res.get("triggers"))
+    except Exception as e:
+        log.exception("pump test failed")
+        await ctx.bot.send_message(chat_id, f"Pump test failed: {e}")
+    finally:
+        BT_RUNNING["on"] = False
+
+
+@owner_only
+async def pumptest_cmd(update: Update, ctx):
+    days = int(ctx.args[0]) if ctx.args and ctx.args[0].isdigit() else 14
+    ctx.application.create_task(run_pump_test(ctx, update.effective_chat.id, max(2, min(25, days))))
 
 
 @owner_only
@@ -745,9 +771,10 @@ async def inbox_job(ctx: ContextTypes.DEFAULT_TYPE):
         try:
             with open(path, encoding="utf-8") as fh:
                 data = json.load(fh)
-            if isinstance(data, dict) and data.get("command") == "backtest":   # Claude asked for a backtest run
+            if isinstance(data, dict) and data.get("command") in ("backtest", "pump_test"):   # Claude asked for a test run
                 shutil.move(path, os.path.join(INBOX, "done", name))
-                ctx.application.create_task(run_backtest(ctx, ctx.job.chat_id, int(data.get("days", 28))))
+                fn = run_backtest if data["command"] == "backtest" else run_pump_test
+                ctx.application.create_task(fn(ctx, ctx.job.chat_id, int(data.get("days", 28 if fn is run_backtest else 14))))
                 continue
             items = data.get("positions", []) if isinstance(data, dict) else data
             daily = data.get("daily", []) if isinstance(data, dict) else []
@@ -830,7 +857,7 @@ def main():
     app.add_error_handler(on_error)
     app.add_handler(CommandHandler("start", start))
     for name, fn in [("help", help_cmd), ("rules", rules_cmd), ("today", today_cmd), ("yesterday", yesterday_cmd),
-                     ("day", day_cmd), ("week", week_cmd), ("scan", scan_cmd), ("backtest", backtest_cmd), ("guard", guard_cmd), ("lessons", lessons_cmd), ("rings", rings_cmd), ("morning", morning_cmd),
+                     ("day", day_cmd), ("week", week_cmd), ("scan", scan_cmd), ("backtest", backtest_cmd), ("pumptest", pumptest_cmd), ("guard", guard_cmd), ("lessons", lessons_cmd), ("rings", rings_cmd), ("morning", morning_cmd),
                      ("report", report_cmd), ("chart", chart_cmd), ("tilt", tilt_cmd), ("ideas", ideas_cmd),
                      ("undo", undo_cmd), ("export", export_cmd)]:
         app.add_handler(CommandHandler(name, fn))
