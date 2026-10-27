@@ -1,36 +1,33 @@
 {
-  "date": "2026-10-26",
-  "generated_at": "2026-10-26T07:10:00+03:00",
-  "headline": "No API changes affect the bot this week, so today's ideas make leverage shrink after a loss and match it to each coin's normal noise.",
+  "date": "2026-10-27",
+  "generated_at": "2026-10-27T07:20:00+03:00",
+  "headline": "No API changes break the bot today, so the ideas give you a pre-written plan for after a loss, show how much fees take at high leverage, and flag thin coins before you enter.",
   "ideas": [
     {
-      "title": "Leverage ceiling that steps down after each loss",
-      "why": "Studies of futures traders find individuals take more risk after morning losses to get back to even. Start the day at a 20× cap and halve it after each loss (20→10→5); /tilt and the report flag any trade above the cap. On 25 Oct you went the other way, up to 40×.",
+      "title": "If-then plan that the bot shows you after a loss",
+      "why": "Write 2–3 rules ahead of time, like \"If I lose a trade, then I close Binance for 15 minutes.\" Plans set in if-then form have a medium-to-large effect on sticking to goals and on holding back emotional reactions. The bot repeats your rule after each loss.",
       "effort": "small",
       "area": "discipline"
     },
     {
-      "title": "Liquidation vs noise check on each coin",
-      "why": "Show each coin's 15m ATR as a % of price next to how far liquidation sits at 10×, 20× and 40×. At 40× liquidation is under 2.5% away, so on a coin whose normal 15m candle moves 1%, two ordinary candles can end the trade.",
+      "title": "Fee drag line in /report and /tilt",
+      "why": "Binance charges 0.05% taker fee on the full position size, so a 40× round trip costs about 4% of your margin before price moves (2% at 20×). Show fees paid per day against gross PnL, so overtrading days show what the extra trades cost you.",
       "effort": "small",
       "area": "risk"
     },
     {
-      "title": "Require OI above its 20-hour average for Clean setups",
-      "why": "The scanner already downloads 25 hours of open interest per coin. Requiring OI to sit above its 20h average, not just be up over 4h, would drop movers in thin, low-participation chop, a filter some 15m EMA + OI scripts use against fake-outs. No extra API calls.",
+      "title": "\"Thin\" flag for movers with a wide spread",
+      "why": "Top movers are often thin coins where the spread and slippage eat a scalp. One bookTicker call covers every symbol: flag a coin when its spread is many times BTC's. At 0.25% slippage each way, a trade must move 0.5% just to break even.",
       "effort": "small",
       "area": "scanner"
     }
   ],
   "watch": [],
   "sources": [
-    {"title": "The house money and break-even effects for different types of traders: Evidence from Taiwan futures markets (Huang & Chan, 2014)", "url": "https://ideas.repec.org/a/eee/pacfin/v26y2014icp1-13.html"},
-    {"title": "ATR-based Stop Distance (LuxAlgo)", "url": "https://www.luxalgo.com/library/concept/atr-based-stop-distance/"},
-    {"title": "Leverage and Margin of USDⓈ-M Futures (Binance FAQ)", "url": "https://binance.com/en/support/faq/360033162192"},
-    {"title": "How to Reduce Your Chances of Getting Liquidated (Binance Square)", "url": "https://www.binance.com/en/square/post/1628466"},
-    {"title": "15m EMA 9/15 + OI Flip Signals (TradingView script)", "url": "https://de.tradingview.com/script/FSwOxBJA-15m-EMA-9-15-OI-Flip-Signals"},
-    {"title": "Derivatives Change Log (Binance Developers)", "url": "https://developers.binance.com/docs/derivatives/change-log"},
-    {"title": "Bot API changelog (Telegram)", "url": "https://core.telegram.org/bots/api-changelog.md"},
-    {"title": "python-telegram-bot changelog", "url": "https://docs.python-telegram-bot.org/en/stable/changelog.html"}
+    {"title": "How to Maximize Implementation Intention Effects (Gollwitzer, Wieber, Myers & McCrea)", "url": "https://www.socmot.uni-konstanz.de/sites/default/files/How-to-maximize-implementation-intention-effects.pdf"},
+    {"title": "Binance Futures Fee Structure & Fee Calculations (Binance Support)", "url": "https://www.binance.com/fr/support/articles/360033544231"},
+    {"title": "How to spot low-liquidity crypto perps before you get wrecked (Buildix)", "url": "https://www.buildix.trade/blog/how-to-spot-low-liquidity-crypto-perps-before-wrecked"},
+    {"title": "Loss-control rules (LuxAlgo)", "url": "https://www.luxalgo.com/library/concept/loss-control-rules/"},
+    {"title": "Derivatives Change Log (Binance Developers)", "url": "https://developers.binance.com/docs/derivatives/change-log"}
   ]
 }
