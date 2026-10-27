@@ -80,13 +80,32 @@ def owner_id():
     return int(v) if v else None
 
 
+_WARNED = set()
+
+
+async def stranger(update: Update, ctx):
+    """Someone who isn't you: say nothing to them, and tell you once per person."""
+    u = update.effective_user
+    uid = u.id if u else update.effective_chat.id
+    log.warning("Ignored a message from a stranger (id %s, @%s)", uid, getattr(u, "username", None))
+    oid = owner_id()
+    if oid and uid != oid and uid not in _WARNED:
+        _WARNED.add(uid)
+        who = (f"@{u.username}" if u and u.username else (u.full_name if u else "someone")) + f" (id {uid})"
+        try:
+            await ctx.bot.send_message(oid, f"🔒 {who} tried to use your bot. They were ignored and saw nothing.")
+        except Exception:
+            pass
+
+
 def owner_only(fn):
     @wraps(fn)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         oid = owner_id()
-        if oid is None or update.effective_chat.id != oid:
-            if update.message:
-                await update.message.reply_text("This is a private bot.")
+        user = update.effective_user
+        # must be your own private chat with the bot, and you as the sender (blocks groups and forwarded access)
+        if oid is None or update.effective_chat.id != oid or (user and user.id != oid):
+            await stranger(update, ctx)
             return
         return await fn(update, ctx)
     return wrapper
@@ -182,8 +201,8 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         store.set_setting(con, "owner", chat)
         oid = chat
         schedule(ctx.application, chat)
-    if chat != oid:
-        await update.message.reply_text("This is a private bot.")
+    if chat != oid or (update.effective_user and update.effective_user.id != oid):
+        await stranger(update, ctx)
         return
     if WEBAPP_URL:
         await ctx.bot.set_chat_menu_button(chat, MenuButtonWebApp("Scanner", WebAppInfo(WEBAPP_URL)))
