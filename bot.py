@@ -54,6 +54,9 @@ TZ = ZoneInfo(os.getenv("TIMEZONE", "Africa/Addis_Ababa"))
 MORNING = os.getenv("MORNING_TIME", "08:00")
 EVENING = os.getenv("EVENING_REMINDER", "21:00")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip()
+# 27 Oct: the scanner page moved from Netlify (out of free build credits) to GitHub Pages, which has no limit
+if "datradingbot.netlify.app" in WEBAPP_URL:
+    WEBAPP_URL = "https://addisfund9-ux.github.io/trading-bot/"
 MAX_HOLD = float(os.getenv("MAX_HOLD_MIN", "10"))
 MAX_LOSSES = int(os.getenv("MAX_LOSSES_PER_COIN", "2"))
 COOLDOWN = float(os.getenv("COOLDOWN_MIN", "15"))            # wait this long after any loss
@@ -840,6 +843,11 @@ async def post_init(app: Application):
     oid = owner_id()
     if oid:
         schedule(app, oid)
+        if WEBAPP_URL:   # keep the Scanner button pointing at the current address
+            try:
+                await app.bot.set_chat_menu_button(oid, MenuButtonWebApp("Scanner", WebAppInfo(WEBAPP_URL)))
+            except Exception as e:
+                log.warning("menu button: %s", e)
     else:
         log.info("No owner yet — open the bot in Telegram and send /start")
 
