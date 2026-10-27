@@ -60,6 +60,8 @@ You'll get a **Scanner** button next to the message box, and an "Open scanner" b
 | `/report`, `/report 2026-10-24` | Claude's summary + your trades on the chart + the numbers (yesterday by default) |
 | `/chart`, `/chart 2026-10-24` | Your trades drawn on the price chart (today by default) |
 | `/ideas` | Today's research: new ideas for the bot and your trading (also in the 08:00 brief) |
+| `/lessons` | Your mistakes ranked by what they cost over 7 days, one rule for today, your clean-day streak |
+| `/rings`, `/rings 2026-10-24` | Trading rings: calm trades, winning trades, rules kept, plus every trade as a bead and your week |
 | `/tilt`, `/tilt 2026-10-24`, `/tilt week` | Revenge-trading and overtrading check, with your day drawn on one line |
 | `/today`, `/yesterday`, `/day 2026-10-24` | Review of one day |
 | `/week` | Last 7 days with a chart |

@@ -21,6 +21,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 import backtest
 import coach
 import guard
+import lessons
 import extract
 import importer
 import review
@@ -159,6 +160,8 @@ HELP = (
     "/report — summary + your trades on the chart (yesterday, or /report 2026-10-24)\n"
     "/chart — today's trades drawn on the price chart\n"
     "/ideas — today's research: new ideas for the bot and your trading\n"
+    "/lessons — your mistakes ranked by what they cost, a rule for today, your clean-day streak\n"
+    "/rings — today's trading rings (calm · wins · rules), or /rings 2026-10-24\n"
     "/tilt — revenge-trading and overtrading check (today, /tilt 2026-10-24, or /tilt week)\n"
     "/today · /yesterday · /day 2026-10-24 — reviews\n"
     "/week — last 7 days with a chart\n"
@@ -600,12 +603,59 @@ async def ideas_cmd(update: Update, ctx):
     await send(ctx, update.effective_chat.id, txt or "No ideas published yet — the research runs each morning before 08:00.")
 
 
+def lessons_data(last_day: date):
+    days = [(last_day - timedelta(days=i)).isoformat() for i in range(7)]
+    by_day = {d: store.positions_for(con, d) for d in days}
+    return lessons.build(by_day, last_day, {"cooldown": COOLDOWN, "max_trades": MAX_TRADES, "loss_limit": LOSS_LIMIT,
+                                            "max_hold": MAX_HOLD, "max_losses": MAX_LOSSES})
+
+
+async def send_lessons(ctx, chat_id, last_day: date, full=True):
+    data = lessons_data(last_day)          # sqlite connection belongs to this thread
+    try:
+        png = await asyncio.to_thread(lessons.chart, data)
+        rule = lessons.rule_for_today(data)
+        await ctx.bot.send_photo(chat_id, png, caption=(f"Rule for today: {rule}" if rule and not full else None))
+    except Exception:
+        log.exception("rings chart failed")
+    if full:
+        await send(ctx, chat_id, lessons.text(data))
+    return data
+
+
+def _day_arg(args, default):
+    if args:
+        try:
+            return date.fromisoformat(args[0])
+        except ValueError:
+            pass
+    return default
+
+
+@owner_only
+async def lessons_cmd(update: Update, ctx):
+    """Your mistakes ranked by cost, a rule for today, and the rings for the last day you traded."""
+    last_day = _day_arg(ctx.args, None)
+    if last_day is None:
+        row = con.execute("SELECT MAX(day) d FROM positions").fetchone()
+        last_day = date.fromisoformat(row["d"]) if row and row["d"] else today()
+    await send_lessons(ctx, update.effective_chat.id, last_day, full=True)
+
+
+@owner_only
+async def rings_cmd(update: Update, ctx):
+    await send_lessons(ctx, update.effective_chat.id, _day_arg(ctx.args, today()), full=False)
+
+
 async def morning_brief(ctx, chat_id):
     y = (today() - timedelta(days=1)).isoformat()
     rows, total, _ = week_data()
     await send_report(ctx, chat_id, y, header=f"☀️ <b>Good morning, Dagi</b> — {datetime.now(TZ):%A %d %B}\n\n")
-    parts = [f"<b>Last 7 days:</b> {review.money(total)} USDT",
-             f"<b>Today's rules:</b> close losers after {MAX_HOLD:g} min · stop a coin after {MAX_LOSSES} losses in a row", ""]
+    try:
+        await send_lessons(ctx, chat_id, today() - timedelta(days=1), full=False)
+    except Exception:
+        log.exception("morning rings failed")
+    parts = [f"<b>Last 7 days:</b> {review.money(total)} USDT · /lessons for what your mistakes cost", ""]
     try:
         parts.append(await run_scan_text())
     except Exception as e:
@@ -742,7 +792,7 @@ def main():
     app.add_error_handler(on_error)
     app.add_handler(CommandHandler("start", start))
     for name, fn in [("help", help_cmd), ("rules", rules_cmd), ("today", today_cmd), ("yesterday", yesterday_cmd),
-                     ("day", day_cmd), ("week", week_cmd), ("scan", scan_cmd), ("backtest", backtest_cmd), ("guard", guard_cmd), ("morning", morning_cmd),
+                     ("day", day_cmd), ("week", week_cmd), ("scan", scan_cmd), ("backtest", backtest_cmd), ("guard", guard_cmd), ("lessons", lessons_cmd), ("rings", rings_cmd), ("morning", morning_cmd),
                      ("report", report_cmd), ("chart", chart_cmd), ("tilt", tilt_cmd), ("ideas", ideas_cmd),
                      ("undo", undo_cmd), ("export", export_cmd)]:
         app.add_handler(CommandHandler(name, fn))
