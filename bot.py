@@ -20,6 +20,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 import backtest
 import coach
+import guard
 import extract
 import importer
 import review
@@ -102,6 +103,8 @@ def schedule(app: Application, chat_id: int):
             j.schedule_removal()
     jq.run_daily(morning_job, parse_hhmm(MORNING), chat_id=chat_id, name="morning")
     jq.run_repeating(inbox_job, interval=60, first=10, chat_id=chat_id, name="inbox")
+    if LIVE:
+        jq.run_repeating(guard_job, interval=20, first=15, chat_id=chat_id, name="guard")
     if EVENING:
         jq.run_daily(evening_job, parse_hhmm(EVENING), chat_id=chat_id, name="evening")
     log.info("Scheduled morning brief at %s and reminder at %s (%s)", MORNING, EVENING or "off", TZ)
@@ -162,6 +165,7 @@ HELP = (
     "/scan — run the scanner now\n"
     "/backtest — would the scanner's Clean signals have made money? (last 28 days, ~10 min; /backtest 14)\n"
     "/morning — send the morning brief now\n"
+    "/guard — live tilt guard status (warns you while you trade; needs a read-only Binance key)\n"
     "/undo — remove the last batch you sent\n"
     "/export — all trades as CSV\n"
     "/rules — your trading rules"
@@ -347,6 +351,47 @@ async def scan_cmd(update: Update, ctx):
 
 
 BT_RUNNING = {"on": False}
+BINANCE_KEY, BINANCE_SECRET = os.getenv("BINANCE_API_KEY", "").strip(), os.getenv("BINANCE_API_SECRET", "").strip()
+LIVE = guard.Live(BINANCE_KEY, BINANCE_SECRET, cooldown_min=COOLDOWN, max_trades=MAX_TRADES,
+                  loss_limit=LOSS_LIMIT, max_hold_min=MAX_HOLD) if BINANCE_KEY and BINANCE_SECRET else None
+GUARD_STATE = {"told_bad_key": False, "errors": 0}
+
+
+async def guard_job(ctx: ContextTypes.DEFAULT_TYPE):
+    """Live tilt guard: every 20 seconds, look at the Binance account (read-only) and warn on rule breaks."""
+    if not LIVE:
+        return
+    try:
+        alerts = await asyncio.to_thread(LIVE.poll)
+        GUARD_STATE["errors"] = 0
+    except Exception as e:
+        GUARD_STATE["errors"] += 1
+        if GUARD_STATE["errors"] in (1, 30):
+            log.warning("guard: %s", e)
+        return
+    if LIVE.ok is False and not GUARD_STATE["told_bad_key"]:
+        GUARD_STATE["told_bad_key"] = True
+        await ctx.bot.send_message(ctx.job.chat_id, "🛡 Tilt guard is OFF: " + LIVE.reason)
+    for a in alerts:
+        await ctx.bot.send_message(ctx.job.chat_id, "🛡 " + a, parse_mode=ParseMode.HTML)
+
+
+@owner_only
+async def guard_cmd(update: Update, ctx):
+    if not LIVE:
+        await update.message.reply_text(
+            "🛡 The live tilt guard isn't set up yet. It needs a READ-ONLY Binance API key:\n"
+            "1. Binance → Profile → API Management → Create API → System generated.\n"
+            "2. Leave ONLY “Enable Reading” ticked (no trading, no withdrawals). Restrict access to your IP if you can.\n"
+            "3. Paste the key and secret into .env after BINANCE_API_KEY= and BINANCE_API_SECRET=, then restart start.bat.\n"
+            "Never send the key to anyone, including in this chat.")
+        return
+    ok, reason = await asyncio.to_thread(LIVE.verify)
+    g = LIVE.guard
+    await update.message.reply_text(
+        ("🛡 Tilt guard is ON — checking every 20 seconds.\n" if ok else f"🛡 Tilt guard is OFF: {reason}\n")
+        + (f"Open positions: {', '.join(k[0].replace('USDT', '') + ' ' + k[1].lower() for k in g.open) or 'none'}\n"
+           f"Positions opened today: {g.opens_today}" if ok else ""))
 
 
 async def run_backtest(ctx, chat_id, days=28):
@@ -697,7 +742,7 @@ def main():
     app.add_error_handler(on_error)
     app.add_handler(CommandHandler("start", start))
     for name, fn in [("help", help_cmd), ("rules", rules_cmd), ("today", today_cmd), ("yesterday", yesterday_cmd),
-                     ("day", day_cmd), ("week", week_cmd), ("scan", scan_cmd), ("backtest", backtest_cmd), ("morning", morning_cmd),
+                     ("day", day_cmd), ("week", week_cmd), ("scan", scan_cmd), ("backtest", backtest_cmd), ("guard", guard_cmd), ("morning", morning_cmd),
                      ("report", report_cmd), ("chart", chart_cmd), ("tilt", tilt_cmd), ("ideas", ideas_cmd),
                      ("undo", undo_cmd), ("export", export_cmd)]:
         app.add_handler(CommandHandler(name, fn))

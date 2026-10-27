@@ -64,6 +64,8 @@ You'll get a **Scanner** button next to the message box, and an "Open scanner" b
 | `/today`, `/yesterday`, `/day 2026-10-24` | Review of one day |
 | `/week` | Last 7 days with a chart |
 | `/scan` | Run the scanner now |
+| `/backtest`, `/backtest 14` | Replay the scanner over the last 28 (or 14) days and trade every Clean signal: win rate, average R, total. Takes ~10 min |
+| `/guard` | Live tilt guard status |
 | `/morning` | Send the morning brief now (good for testing) |
 | `/undo` | Remove the last batch of screenshots you sent |
 | `/export` | Download every trade as a CSV |
@@ -76,6 +78,17 @@ You'll get a **Scanner** button next to the message box, and an "Open scanner" b
 - `SCAN_TOP`, `SCAN_MIN_VOL_M`: how many movers to scan, and the minimum 24h volume in $M.
 
 After you change `.env`, restart the bot by closing the black window and opening `start.bat` again.
+
+## Live tilt guard (optional)
+While you trade, the bot checks your Binance account every 20 seconds and warns you in Telegram when you: open a trade within your cooldown after a loss, flip sides right after a loss, raise leverage or size after a loss, go past your trade count or daily loss limit, have a position with no stop-loss, or hold a losing trade past `MAX_HOLD_MIN`.
+
+It needs a **read-only** Binance API key:
+1. Binance → Profile → **API Management** → **Create API** → System generated.
+2. Leave **only "Enable Reading"** ticked. No trading, no withdrawals, no transfers. Restricting it to your IP is even better.
+3. Open `.env` in Notepad and add two lines: `BINANCE_API_KEY=...` and `BINANCE_API_SECRET=...`. Save, then restart `start.bat`.
+4. Send `/guard` to check it says ON.
+
+The bot asks Binance what the key can do and **refuses any key that can trade or withdraw**.
 
 ## Your data
 - All trades are stored in **trades.db** in this folder. Back it up now and then, or use `/export`.
