@@ -59,6 +59,10 @@ COOLDOWN = float(os.getenv("COOLDOWN_MIN", "15"))            # wait this long af
 # your plan from 27 Oct: at most 3 trades a day, mornings only (PLAN_MAX_TRADES / LAST_ENTRY_TIME override)
 MAX_TRADES = min(int(os.getenv("MAX_TRADES_PER_DAY", "3")), int(os.getenv("PLAN_MAX_TRADES", "3")))
 LAST_ENTRY = os.getenv("LAST_ENTRY_TIME", "12:00").strip() or None
+# your own words, 27 Oct: trading is practice while you look for work
+FOCUS = os.getenv("FOCUS_NOTE", "🎯 <b>Job search comes first.</b> Trading is practice for now: tiny size, "
+                  "at most 3 trades, mornings only, a stop on every one. You trade best when you're "
+                  "focused on finding work.").strip()
 LOSS_LIMIT = float(os.getenv("DAILY_LOSS_LIMIT", "5"))       # stop after giving back this much from the day's high
 IDEAS_URL = os.getenv("IDEAS_URL", (WEBAPP_URL.rstrip("/") + "/ideas.json") if WEBAPP_URL else "").strip()
 INBOX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox")
@@ -127,6 +131,8 @@ def schedule(app: Application, chat_id: int):
     jq.run_repeating(inbox_job, interval=60, first=10, chat_id=chat_id, name="inbox")
     if LIVE:
         jq.run_repeating(guard_job, interval=20, first=15, chat_id=chat_id, name="guard")
+    if LAST_ENTRY:
+        jq.run_daily(window_closed_job, parse_hhmm(LAST_ENTRY), chat_id=chat_id, name="window")
     if EVENING:
         jq.run_daily(evening_job, parse_hhmm(EVENING), chat_id=chat_id, name="evening")
     log.info("Scheduled morning brief at %s and reminder at %s (%s)", MORNING, EVENING or "off", TZ)
@@ -220,6 +226,7 @@ async def help_cmd(update: Update, ctx):
 @owner_only
 async def rules_cmd(update: Update, ctx):
     await update.message.reply_text(
+        (FOCUS + "\n\n" if FOCUS else "") +
         f"<b>Your rules</b>\n1. Close any losing trade still open after {MAX_HOLD:.0f} minutes.\n"
         f"2. Stop trading a coin after {MAX_LOSSES} losses in a row on it.\n"
         f"3. After any loss, wait {COOLDOWN:g} minutes before the next trade.\n"
@@ -672,7 +679,8 @@ async def rings_cmd(update: Update, ctx):
 async def morning_brief(ctx, chat_id):
     y = (today() - timedelta(days=1)).isoformat()
     rows, total, _ = week_data()
-    await send_report(ctx, chat_id, y, header=f"☀️ <b>Good morning, Dagi</b> — {datetime.now(TZ):%A %d %B}\n\n")
+    await send_report(ctx, chat_id, y, header=f"☀️ <b>Good morning, Dagi</b> — {datetime.now(TZ):%A %d %B}\n\n"
+                                              + (FOCUS + "\n\n" if FOCUS else ""))
     try:
         await send_lessons(ctx, chat_id, today() - timedelta(days=1), full=False)
     except Exception:
@@ -708,6 +716,14 @@ async def send_brief_once(ctx, chat_id):
     except Exception:
         store.set_setting(con, "last_brief", "")       # try again next minute
         raise
+
+
+async def window_closed_job(ctx: ContextTypes.DEFAULT_TYPE):
+    n = len(store.positions_for(con, today().isoformat()))
+    await ctx.bot.send_message(ctx.job.chat_id,
+        f"🕛 <b>{LAST_ENTRY} — trading window closed.</b> " + (f"{n} trade(s) logged so far today. " if n else "")
+        + "Practice is done for today. Close Binance and give the afternoon to the job search: "
+        "applications, portfolio, reaching out to clients.", parse_mode=ParseMode.HTML)
 
 
 async def evening_job(ctx: ContextTypes.DEFAULT_TYPE):
