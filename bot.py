@@ -18,6 +18,7 @@ from telegram import (InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOpt
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
+import backtest
 import coach
 import extract
 import importer
@@ -159,6 +160,7 @@ HELP = (
     "/today · /yesterday · /day 2026-10-24 — reviews\n"
     "/week — last 7 days with a chart\n"
     "/scan — run the scanner now\n"
+    "/backtest — would the scanner's Clean signals have made money? (last 28 days, ~10 min; /backtest 14)\n"
     "/morning — send the morning brief now\n"
     "/undo — remove the last batch you sent\n"
     "/export — all trades as CSV\n"
@@ -342,6 +344,38 @@ async def scan_cmd(update: Update, ctx):
         return
     await msg.delete()
     await send(ctx, update.effective_chat.id, text, reply_markup=webapp_markup())
+
+
+BT_RUNNING = {"on": False}
+
+
+async def run_backtest(ctx, chat_id, days=28):
+    if BT_RUNNING["on"]:
+        await ctx.bot.send_message(chat_id, "A backtest is already running — the result will arrive here.")
+        return
+    BT_RUNNING["on"] = True
+    try:
+        await ctx.bot.send_message(chat_id, f"🧪 Backtesting the scanner over the last {days} days. This pulls a lot of "
+                                            "Binance data, so it takes about 10 minutes. Keep the PC awake; the result arrives here.")
+        res = await asyncio.to_thread(backtest.run, days, lambda m: log.info("backtest: %s", m))
+        try:
+            png = await asyncio.to_thread(backtest.chart, res)
+            await ctx.bot.send_photo(chat_id, open(png, "rb"))
+        except Exception:
+            log.exception("backtest chart failed")
+        await send(ctx, chat_id, backtest.text(res))
+        log.info("backtest done: %s", {k: res[k] for k in ("new", "old")})
+    except Exception as e:
+        log.exception("backtest failed")
+        await ctx.bot.send_message(chat_id, f"Backtest failed: {e}")
+    finally:
+        BT_RUNNING["on"] = False
+
+
+@owner_only
+async def backtest_cmd(update: Update, ctx):
+    days = int(ctx.args[0]) if ctx.args and ctx.args[0].isdigit() else 28
+    ctx.application.create_task(run_backtest(ctx, update.effective_chat.id, max(3, min(29, days))))
 
 
 @owner_only
@@ -578,6 +612,10 @@ async def inbox_job(ctx: ContextTypes.DEFAULT_TYPE):
         try:
             with open(path, encoding="utf-8") as fh:
                 data = json.load(fh)
+            if isinstance(data, dict) and data.get("command") == "backtest":   # Claude asked for a backtest run
+                shutil.move(path, os.path.join(INBOX, "done", name))
+                ctx.application.create_task(run_backtest(ctx, ctx.job.chat_id, int(data.get("days", 28))))
+                continue
             items = data.get("positions", []) if isinstance(data, dict) else data
             daily = data.get("daily", []) if isinstance(data, dict) else []
             batch = "inbox-" + uuid.uuid4().hex[:6]
@@ -630,7 +668,7 @@ async def reload_job(ctx: ContextTypes.DEFAULT_TYPE):
     except Exception:
         log.exception("brief catch-up failed (will retry)")
     try:
-        if _code_stamp() != _STAMP:
+        if _code_stamp() != _STAMP and not BT_RUNNING["on"]:   # never restart in the middle of a backtest
             log.info("Code updated — restarting to load the new version.")
             os._exit(0)
     except Exception:
@@ -659,7 +697,7 @@ def main():
     app.add_error_handler(on_error)
     app.add_handler(CommandHandler("start", start))
     for name, fn in [("help", help_cmd), ("rules", rules_cmd), ("today", today_cmd), ("yesterday", yesterday_cmd),
-                     ("day", day_cmd), ("week", week_cmd), ("scan", scan_cmd), ("morning", morning_cmd),
+                     ("day", day_cmd), ("week", week_cmd), ("scan", scan_cmd), ("backtest", backtest_cmd), ("morning", morning_cmd),
                      ("report", report_cmd), ("chart", chart_cmd), ("tilt", tilt_cmd), ("ideas", ideas_cmd),
                      ("undo", undo_cmd), ("export", export_cmd)]:
         app.add_handler(CommandHandler(name, fn))
