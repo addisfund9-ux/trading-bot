@@ -292,7 +292,7 @@ def run(days=28, progress=lambda msg: None):
         j = [last_closed(d[tf], t) for tf, _, _ in sc.TFS]
         return [trend_at(d[tf], jj) for (tf, _, _), jj in zip(sc.TFS, j)]
 
-    trades, busy_new, busy_old, seen_signals = [], {}, {}, 0
+    trades, busy_new, busy_old, seen_signals, signals = [], {}, {}, 0, []
     for t in hours:
         bi = last_closed(btc["1h"], t)
         if bi < 50:
@@ -325,6 +325,8 @@ def run(days=28, progress=lambda msg: None):
             c["rs4"] = c["ch4"] - b["ch4"]
             new = sc.score(c, b)
             clean_new, clean_old = is_clean(new), score_v1(c, b)
+            if new["full"] or clean_old:
+                signals.append(_signal_row(t, s, new, c, b, clean_new, clean_old, d["15m"], price))
             if not (clean_new or clean_old):
                 continue
             seen_signals += 1
@@ -345,7 +347,31 @@ def run(days=28, progress=lambda msg: None):
                            "r": round(r - fee_r, 3), "fee_r": round(fee_r, 3), "stop_pct": round(risk / price * 100, 2),
                            "hours": round((exit_t - t) / HOUR, 1), "chg": round(p["chg"], 1),
                            "funding": new["funding"]})
+    try:
+        os.makedirs(OUT_DIR, exist_ok=True)
+        with open(os.path.join(OUT_DIR, "signals.json"), "w", encoding="utf-8") as fh:
+            json.dump({"days": days, "from": start, "to": now, "fields": SIGNAL_FIELDS, "rows": signals}, fh,
+                      separators=(",", ":"))
+    except Exception:
+        pass
     return summarise(trades, days, start, now, len(cands))
+
+
+# ---------- raw signals, so other rule ideas can be tested without re-downloading ----------
+SIGNAL_FIELDS = ["time", "sym", "dir", "score", "flags", "clean", "clean_old", "chg", "ch4", "ext", "spike", "oi_ch4",
+                 "taker", "lsr", "funding", "corr", "rs4", "vol_pct", "atr_pct", "btc_trends", "trends", "path"]
+
+
+def _signal_row(t, s, new, c, b, clean_new, clean_old, k15, price):
+    """path = the next 24h of 15m candles as [high, low, close] in basis points from the signal price."""
+    i = bisect.bisect_left(k15["t"], t)
+    path = [[round((k15["h"][j] / price - 1) * 1e4), round((k15["l"][j] / price - 1) * 1e4),
+             round((k15["c"][j] / price - 1) * 1e4)] for j in range(i, min(i + 96, len(k15["t"])))]
+    rnd = lambda v, n=3: None if v is None else round(v, n)
+    return [t, s, new["dir"], new["score"], new["flags"], clean_new, clean_old, rnd(c["chg"], 2), rnd(c["ch4"], 2),
+            rnd(c["ext"], 2), rnd(c["spike"], 2), rnd(c["oi_ch4"], 2), rnd(c["taker"]), rnd(c["lsr"]),
+            rnd(c["funding"], 6), rnd(c["corr"]), rnd(c["rs4"], 2), rnd(c["vol_pct"]), rnd(c["atr"] / price * 100),
+            b["trends"], c["trends"], path]
 
 
 # ---------- results ----------
