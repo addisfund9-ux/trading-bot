@@ -159,6 +159,20 @@ li.dropped{list-style:none;border:1px dashed var(--amber);border-radius:12px;pad
 li.dropped b{display:block;margin-bottom:4px}
 li.dropped .tick{font-size:13px;font-weight:700;margin-right:4px}
 .linkbtn{background:none;border:0;color:var(--info);font:inherit;text-decoration:underline;cursor:pointer;padding:0 2px}
+/* ---------- pump tab ---------- */
+.pintro{background:var(--ink2);border-radius:var(--r-md);padding:14px 16px;margin-bottom:12px}
+.pintro b{color:var(--fog)} .pintro p{margin:6px 0 0;line-height:1.5}
+.warnline{color:var(--amber)!important}
+.chk{display:flex;align-items:center;gap:6px;cursor:pointer}
+.pbadge{font-size:12px;font-weight:700;padding:4px 9px;border-radius:6px;white-space:nowrap}
+.pbadge.go{background:var(--amber);color:#1a1300} .pbadge.on{background:rgba(47,211,165,.14);color:var(--long)}
+.pbadge.wait{background:var(--ink3);color:var(--mist);font-weight:600}
+.pcoin.trigger{border-color:rgba(255,181,71,.55)} .pcoin.none{opacity:.5}
+.pcoin{cursor:default}
+.flag.good{color:var(--long);border-color:rgba(47,211,165,.4)}
+button.btn.primary{background:var(--fog);color:var(--ink);font-weight:800}
+button.btn.primary:disabled{opacity:.6}
+h3.sect{font-size:16px;margin:26px 2px 10px;color:var(--fog)}
 </style>
 </head>
 <body>
@@ -170,6 +184,7 @@ li.dropped .tick{font-size:13px;font-weight:700;margin-right:4px}
 </header>
 <nav>
   <button class="on" data-tab="scan">Scanner</button>
+  <button data-tab="pump">Pump</button>
   <button data-tab="journal">Journal</button>
   <button data-tab="settings">Settings</button>
 </nav>
@@ -212,6 +227,34 @@ li.dropped .tick{font-size:13px;font-weight:700;margin-right:4px}
       <b>Mini chart.</b> The last 10 days on the 4h chart, with the 4h EMA 50 as the faint amber line.<br><br><b>Clean</b> means all three timeframes agree, the score is 60 or more and there are no flags. The scanner filters by your rules; it doesn't predict price. Check the chart and size each trade so one loss can't hurt you.
     </div>
   </details>
+</main>
+
+<main id="tab-pump" hidden>
+  <div class="pintro">
+    <b>Pump watch</b>
+    <p class="sub"><b>Direction:</b> 30m, 1h and 4h EMAs agree. <b>Trigger:</b> 1m, 5m and 15m EMA 9/21 line up the same way. A fresh trigger (the last 3 minutes) is logged below. <b>Volume shift</b> = 5-minute volume at least 2× the half hour before, with buyers (or sellers) in control. A <b>wide EMA gap</b> on 15m can mean the move is already tired.</p>
+    <p class="sub warnline">Not proven yet. The test on past data decides whether this is worth money. Until then, watch and let the journal score it.</p>
+  </div>
+  <div class="actions" style="margin-top:0">
+    <button class="btn primary" id="pScan">Scan for pumps</button>
+    <label class="sub chk"><input type="checkbox" id="pAuto"> Rescan every 2 min</label>
+    <label class="sub chk"><input type="checkbox" id="pAll"> Show coins with no direction</label>
+  </div>
+  <div class="status" id="pstatus"></div>
+  <div class="sub" id="pcount" style="margin:0 2px 10px"></div>
+  <ol class="coins" id="pcoins"></ol>
+  <h3 class="sect">Pump journal</h3>
+  <div class="stats" id="pjstats"></div>
+  <div class="actions" style="margin-top:0">
+    <div class="sub">Check results replays each trigger with the same exits as the test: stop 1.5× the 15m ATR, target 1.5R, out after 2 hours, fees included.</div>
+    <button class="btn" id="pEval">Check results</button>
+    <button class="btn" id="pClr">Clear</button>
+  </div>
+  <div class="status" id="pjstatus"></div>
+  <div class="tablewrap"><table id="pjtbl">
+    <thead><tr><th>Logged</th><th>Coin</th><th>Trigger</th><th class="num">Entry</th><th class="num">+15m</th><th class="num">+1h</th><th>Outcome</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table></div>
 </main>
 
 <main id="tab-journal" hidden>
@@ -316,7 +359,7 @@ async function getJSON(path){
 async function safe(p){ try { return await p; } catch(e){ return null; } }
 async function klines(sym, tf, limit=300){
   const k = await getJSON(`/fapi/v1/klines?symbol=${sym}&interval=${tf}&limit=${limit}`);
-  return { t:k.map(x=>+x[0]), open:k.map(x=>+x[1]), high:k.map(x=>+x[2]), low:k.map(x=>+x[3]), close:k.map(x=>+x[4]), qvol:k.map(x=>+x[7]) };
+  return { t:k.map(x=>+x[0]), open:k.map(x=>+x[1]), high:k.map(x=>+x[2]), low:k.map(x=>+x[3]), close:k.map(x=>+x[4]), qvol:k.map(x=>+x[7]), tbq:k.map(x=>+x[10]) };
 }
 async function derivs(sym){
   const [oi, tk, ls] = await Promise.all([
@@ -559,6 +602,73 @@ function journalStats(list){
            dirHit24: w24.length ? w24.filter(j=>j.res.ret24>0).length/w24.length : null, buckets };
 }
 
+/* ================= pump watch (Dagi's trigger) =================
+   Direction: 30m EMA 9/21, 1h EMA 20/50, 4h EMA 50/200 all agree.
+   Trigger:   1m, 5m, 15m EMA 9/21 line up the same way (fresh = within the last 3 minutes).
+   Early signs: 5-minute volume vs the 30 minutes before, and the taker-buy share.
+   Warning:   EMA gap on 15m (EMA9 to EMA21 in 15m ATRs) — a wide gap can mean the move is tired. */
+const PUMP_TFS = [
+  {tf:'1m', fast:9, slow:21, limit:150}, {tf:'5m', fast:9, slow:21, limit:120}, {tf:'15m', fast:9, slow:21, limit:120},
+  {tf:'30m', fast:9, slow:21, limit:120}, {tf:'1h', fast:20, slow:50, limit:150}, {tf:'4h', fast:50, slow:200, limit:400}];
+function pemaSeries(v, n){ const k = 2/(n+1), out = []; let e = v[0]; for (const x of v){ e = x*k + e*(1-k); out.push(e); } return out; }
+function formingTrend(k, fast, slow, j, price){
+  // EMAs of closed candles up to j-1, then the forming candle j at `price`
+  const ef = k._ef || (k._ef = pemaSeries(k.close, fast)), es = k._es || (k._es = pemaSeries(k.close, slow));
+  if (j < 1 || j < slow) return 0;
+  const kf = 2/(fast+1), ks = 2/(slow+1);
+  const f = ef[j-1]*(1-kf) + price*kf, s = es[j-1]*(1-ks) + price*ks;
+  return price > f && f > s ? 1 : price < f && f < s ? -1 : 0;
+}
+function idxAt(k, time){ let lo = 0, hi = k.t.length - 1; while (lo < hi){ const m = (lo+hi+1)>>1; if (k.t[m] <= time) lo = m; else hi = m-1; } return lo; }
+async function pumpAnalyse(sym){
+  const ks = await Promise.all(PUMP_TFS.map(x => klines(sym, x.tf, x.limit)));
+  const K = Object.fromEntries(PUMP_TFS.map((x,i) => [x.tf, ks[i]]));
+  const m = K['1m'], n = m.close.length;
+  const at = i => {                                   // all six trends at 1m candle i (its close)
+    const time = m.t[i], price = m.close[i];
+    return PUMP_TFS.map(x => formingTrend(K[x.tf], x.fast, x.slow, idxAt(K[x.tf], time), price));
+  };
+  const now = at(n-1);
+  const dir = now[3] === now[4] && now[4] === now[5] ? now[5] : 0;
+  const fastOk = tr => dir !== 0 && tr[0] === dir && tr[1] === dir && tr[2] === dir && tr[3] === dir && tr[4] === dir && tr[5] === dir;
+  let alignedFor = 0;
+  for (let i = n-1; i >= Math.max(0, n-60) && fastOk(at(i)); i--) alignedFor++;
+  const q = m.qvol, base = avg(q.slice(n-36, n-6)) || 1e-9;
+  const vol5 = avg(q.slice(n-5)) / base;
+  const tb = m.tbq;
+  const taker5 = tb ? tb.slice(n-5).reduce((a,b)=>a+b,0) / Math.max(1e-9, q.slice(n-5).reduce((a,b)=>a+b,0)) : null;
+  const k15 = K['15m'], j15 = k15.close.length - 1;
+  const atr15 = atr(k15.high.slice(0, j15), k15.low.slice(0, j15), k15.close.slice(0, j15));
+  const f15 = pemaSeries(k15.close, 9), s15 = pemaSeries(k15.close, 21);
+  const gap15 = atr15 ? Math.abs(f15[j15] - s15[j15]) / atr15 : null;
+  const price = m.close[n-1];
+  const state = !dir ? 'none' : alignedFor >= 1 ? (alignedFor <= 3 ? 'trigger' : 'aligned') : 'waiting';
+  return { sym, price, trends: now, dir, state, alignedFor, vol5, taker5, gap15, atr15,
+           volShift: vol5 >= 2 && taker5 != null && (dir > 0 ? taker5 >= 0.55 : taker5 <= 0.45),
+           gapWarn: gap15 != null && gap15 >= 1.5, spark: m.close.slice(-60) };
+}
+function pumpEvaluate(e, k){
+  // k: 1m candles from the log time. Same exits as the test: stop 1.5x 15m ATR, target 1.5R, max 2h.
+  const d = e.dir, risk = 1.5 * e.atr15, stop = e.entry - d*risk, tgt = e.entry + d*risk*1.5;
+  const res = { m15:null, m60:null, outcome:'open', r:null };
+  if (!k || !k.close.length || !risk) return res;
+  const mv = p => d*(p/e.entry-1)*100;
+  if (k.close.length > 15) res.m15 = mv(k.close[15]);
+  if (k.close.length > 60) res.m60 = mv(k.close[60]);
+  for (let i = 1; i < Math.min(k.close.length, 121); i++){
+    const adv = d > 0 ? k.low[i] : k.high[i], fav = d > 0 ? k.high[i] : k.low[i];
+    if (d > 0 ? adv <= stop : adv >= stop){ res.outcome = 'stop'; res.r = -1; break; }
+    if (d > 0 ? fav >= tgt : fav <= tgt){ res.outcome = 'target'; res.r = 1.5; break; }
+  }
+  if (res.outcome === 'open'){
+    const i = Math.min(k.close.length, 121) - 1;
+    res.r = d*(k.close[i]-e.entry)/risk;
+    if (k.close.length >= 121) res.outcome = 'expired';
+  }
+  res.r -= 0.001 * e.entry / risk;                      // fees, like the test
+  return res;
+}
+
 /* ================= UI ================= */
 if (typeof document !== 'undefined'){
 const $ = s => document.querySelector(s);
@@ -621,8 +731,10 @@ const S = () => ({ acct:+$('#acct').value||0, riskPct:+$('#riskPct').value||1, a
 /* tabs */
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x===b));
-  ['scan','journal','settings'].forEach(t => $('#tab-'+t).hidden = t !== b.dataset.tab);
+  ['scan','pump','journal','settings'].forEach(t => $('#tab-'+t).hidden = t !== b.dataset.tab);
   if (b.dataset.tab === 'journal') renderJournal();
+  if (b.dataset.tab === 'pump'){ renderPumpJ(); if (!pumpLast) runPump(); }
+  const dock = document.querySelector('.dock'); if (dock) dock.hidden = b.dataset.tab === 'pump';   // the pump tab has its own Scan button
 });
 
 /* formatting */
@@ -982,7 +1094,106 @@ $('#wlBtn').onclick = () => {
   a.download = `watchlist-${new Date().toISOString().slice(0,10)}.txt`; a.click();
 };
 $('#logBtn').onclick = () => { const n = logPicks(selected()); $('#status').textContent = n ? `${n} coin(s) logged to the journal.` : 'Those coins are already logged today.'; };
-window.__mfsTest = { isClean, renderCoins, dayKey, setLast: v => { last = v; } };  // used by automated checks only
+/* pump tab */
+let pumpLast = null, pumpTimer = null, pumpJ = store.get('mfs_pumpj', []);
+const savePumpJ = () => { pumpJ = pumpJ.slice(0, 300); store.set('mfs_pumpj', pumpJ); cloudSet('mfpj_', pumpJ); };
+cloudGet('mfpj_', arr => { if (!Array.isArray(arr)) { if (pumpJ.length) cloudSet('mfpj_', pumpJ); return; }
+  const ids = new Set(pumpJ.map(j => j.id)); pumpJ = [...pumpJ, ...arr.filter(j => !ids.has(j.id))].sort((a,b) => b.ts - a.ts);
+  store.set('mfs_pumpj', pumpJ); if (!$('#tab-pump').hidden) renderPumpJ(); });
+const PSTATE = { trigger:0, aligned:1, waiting:2, none:3 };
+function pumpCard(c){
+  const side = c.dir > 0 ? '<span class="side l">Long side</span>' : c.dir < 0 ? '<span class="side s">Short side</span>' : '<span class="side lean">No direction</span>';
+  const badge = c.state === 'trigger' ? '<span class="pbadge go">🚀 Trigger</span>'
+    : c.state === 'aligned' ? `<span class="pbadge on">Aligned ${c.alignedFor >= 60 ? '60+' : c.alignedFor} min</span>`
+    : c.state === 'waiting' ? '<span class="pbadge wait">Waiting for 1m · 5m · 15m</span>' : '';
+  const chip = (t, i) => `<span class="ema ${t>0?'up':t<0?'dn':''}">${PUMP_TFS[i].tf} ${t>0?'▲':t<0?'▼':'–'}</span>`;
+  return `<li class="coin pcoin ${c.state}">
+    <div class="top"><span class="tick">${c.sym.replace('USDT','')}</span>${side}<div class="score">${badge}</div></div>
+    <div class="spark" aria-hidden="true">${sparkSVG({c:c.spark, e1:[]}, c.dir)}</div>
+    <div class="emas"><span class="lbl">Direction</span>${[3,4,5].map(i => chip(c.trends[i], i)).join('')}</div>
+    <div class="emas"><span class="lbl">Trigger</span>${[0,1,2].map(i => chip(c.trends[i], i)).join('')}</div>
+    <div class="nums second">
+      <div>${fmtP(c.price)}<small>Price</small></div>
+      <div class="${c.vol5>=2?'up':''}">${c.vol5.toFixed(1)}×<small>Volume 5m</small></div>
+      <div>${c.taker5==null?'–':Math.round(c.taker5*100)+'%'}<small>Taker buys 5m</small></div>
+      <div class="${c.gapWarn?'warn':''}">${c.gap15==null?'–':c.gap15.toFixed(1)}<small>EMA gap 15m</small></div>
+    </div>
+    ${(c.volShift || c.gapWarn) ? `<div class="flags">${c.volShift ? '<span class="flag good">Volume shift</span>' : ''}${c.gapWarn ? '<span class="flag">Wide EMA gap: may be tired</span>' : ''}</div>` : ''}
+    <p class="sub" style="margin:10px 0 0"><a href="${tvUrl(c.sym)}" target="_blank" rel="noopener">Open chart ↗</a></p>
+  </li>`;
+}
+function renderPump(){
+  if (!pumpLast) return;
+  const list = [...pumpLast.coins].sort((a,b) => PSTATE[a.state]-PSTATE[b.state] || b.vol5-a.vol5);
+  const n = s => list.filter(c => c.state === s).length;
+  $('#pcount').innerHTML = `<b>${n('trigger')}</b> trigger · <b>${n('aligned')}</b> aligned · <b>${n('waiting')}</b> waiting · ${n('none')} no direction`;
+  const show = $('#pAll').checked ? list : list.filter(c => c.state !== 'none');
+  $('#pcoins').innerHTML = show.length ? show.map(pumpCard).join('')
+    : '<li class="empty"><b>Nothing lined up right now.</b>No top mover has its 30m, 1h and 4h EMAs pointing the same way. That is information too: wait.</li>';
+}
+async function runPump(){
+  const btn = $('#pScan'); btn.disabled = true; btn.textContent = 'Scanning…'; $('#pstatus').className = 'status';
+  try {
+    const tick = await getJSON('/fapi/v1/ticker/24hr');
+    const minVol = (+$('#minVol').value || 20) * 1e6;
+    const pool0 = tick.filter(t => t.symbol.endsWith('USDT') && !['BTCUSDT','ETHUSDT'].includes(t.symbol) && +t.quoteVolume >= minVol)
+      .map(t => ({ sym:t.symbol, chg:+t.priceChangePercent }));
+    const g = [...pool0].sort((a,b) => b.chg-a.chg).slice(0, 25), gs = new Set(g.map(x => x.sym));
+    const picks = [...g, ...[...pool0].sort((a,b) => a.chg-b.chg).slice(0, 12).filter(x => !gs.has(x.sym))];
+    let done = 0;
+    const res = await pool(picks, 5, async p => {
+      try { const a = await pumpAnalyse(p.sym); $('#pstatus').textContent = `Checking ${++done}/${picks.length} — ${p.sym}`; return { ...a, chg:p.chg }; }
+      catch(e){ done++; return null; }
+    });
+    pumpLast = { at: Date.now(), coins: res.filter(Boolean) };
+    // log fresh triggers (once per coin per 30 minutes)
+    let added = 0;
+    for (const c of pumpLast.coins.filter(c => c.state === 'trigger')){
+      if (pumpJ.some(j => j.sym === c.sym && Date.now() - j.ts < 30*60000)) continue;
+      pumpJ.unshift({ id:c.sym+'-'+Date.now(), ts:Date.now(), sym:c.sym, dir:c.dir, entry:c.price, atr15:c.atr15,
+                      vol5:c.vol5, taker5:c.taker5, gap15:c.gap15, volShift:c.volShift, gapWarn:c.gapWarn, res:null });
+      added++;
+    }
+    if (added){ savePumpJ(); haptic('heavy'); }
+    $('#pstatus').textContent = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}${added ? ` · ${added} new trigger${added>1?'s':''} logged` : ''}`;
+    renderPump(); renderPumpJ();
+  } catch(e){ $('#pstatus').className = 'status err'; $('#pstatus').textContent = 'Could not reach Binance: ' + e.message; }
+  btn.disabled = false; btn.textContent = 'Scan for pumps';
+}
+function renderPumpJ(){
+  const done = pumpJ.filter(j => j.res && j.res.outcome !== 'open');
+  const st = g => { const d = g.filter(j => j.res && j.res.outcome !== 'open'); return d.length ? { n:d.length, win:d.filter(j=>j.res.r>0).length/d.length, avg:d.reduce((s,j)=>s+j.res.r,0)/d.length } : null; };
+  const line = (lab, s) => `<div class="stat"><div class="sub">${lab}</div><div class="v mono ${s && s.avg>=0?'up':'dn'}">${s ? (s.avg>=0?'+':'')+s.avg.toFixed(2)+'R' : '–'}</div><div class="sub">${s ? `${s.n} finished · ${Math.round(s.win*100)}% won` : 'no finished triggers yet'}</div></div>`;
+  $('#pjstats').innerHTML = `<div class="stat"><div class="sub">Triggers logged</div><div class="v mono">${pumpJ.length}</div><div class="sub">${done.length} finished</div></div>`
+    + line('All triggers', st(pumpJ)) + line('With volume shift', st(pumpJ.filter(j => j.volShift)))
+    + line('With wide EMA gap', st(pumpJ.filter(j => j.gapWarn)));
+  const oc = r => !r ? '<span class="sub">not checked</span>' : r.outcome==='target' ? '<span class="pill p-long">TARGET</span>' : r.outcome==='stop' ? '<span class="pill p-short">STOPPED</span>' : r.outcome==='expired' ? `<span class="pill p-mixed">2h: ${r.r>=0?'+':''}${r.r.toFixed(2)}R</span>` : `<span class="pill p-info">open ${r.r>=0?'+':''}${(r.r||0).toFixed(2)}R</span>`;
+  $('#pjtbl tbody').innerHTML = pumpJ.length ? pumpJ.map(j => `<tr>
+    <td class="mono">${new Date(j.ts).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td>
+    <td class="mono"><b>${j.sym.replace('USDT','')}</b></td>
+    <td><span class="pill ${j.dir>0?'p-long':'p-short'}">${j.dir>0?'LONG':'SHORT'}</span>${j.volShift?'<span class="pill p-info">volume</span>':''}${j.gapWarn?'<span class="pill p-warn">wide gap</span>':''}</td>
+    <td class="num mono">${fmtP(j.entry)}</td><td class="num mono">${sgn(j.res?.m15)}</td><td class="num mono">${sgn(j.res?.m60)}</td>
+    <td>${oc(j.res)}</td><td><a href="${tvUrl(j.sym)}" target="_blank" rel="noopener">chart ↗</a></td></tr>`).join('')
+    : '<tr><td colspan="8" class="sub">No triggers yet. Each scan logs fresh triggers here, so you can see later whether they really came before the pump.</td></tr>';
+}
+$('#pScan').onclick = runPump;
+$('#pAuto').onchange = e => { clearInterval(pumpTimer); pumpTimer = e.target.checked ? setInterval(() => { if (!$('#tab-pump').hidden) runPump(); }, 120000) : null; if (e.target.checked) runPump(); };
+$('#pAll').onchange = renderPump;
+$('#pEval').onclick = async () => {
+  const todo = pumpJ.filter(j => !j.res || j.res.outcome === 'open');
+  if (!todo.length){ $('#pjstatus').textContent = 'Everything is already checked.'; return; }
+  $('#pEval').disabled = true; let n = 0;
+  await pool(todo, 4, async j => {
+    try { const k = await getJSON(`/fapi/v1/klines?symbol=${j.sym}&interval=1m&startTime=${j.ts}&limit=125`);
+      j.res = pumpEvaluate(j, { high:k.map(x=>+x[2]), low:k.map(x=>+x[3]), close:k.map(x=>+x[4]) }); } catch(e){}
+    $('#pjstatus').textContent = `Checked ${++n}/${todo.length}`;
+  });
+  savePumpJ(); $('#pEval').disabled = false; renderPumpJ();
+  $('#pjstatus').textContent = `Updated ${n} at ${new Date().toLocaleTimeString()}. Triggers younger than 2 hours stay “open”.`;
+};
+$('#pClr').onclick = () => { if (confirm('Delete the pump journal?')){ pumpJ = []; savePumpJ(); renderPumpJ(); } };
+
+window.__mfsTest = { isClean, renderCoins, dayKey, setLast: v => { last = v; }, setPump: v => { pumpLast = v; }, renderPump, renderPumpJ, setPumpJ: v => { pumpJ = v; } };  // used by automated checks only
 }
 
 /* ===== Telegram Mini App glue ===== */
