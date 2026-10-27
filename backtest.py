@@ -13,7 +13,9 @@ One trade per coin at a time. It runs on your PC because it needs Binance's publ
 import bisect
 import json
 import os
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import requests
@@ -25,13 +27,24 @@ HOUR, Q15 = 3_600_000, 900_000
 STOP_ATR, T1_R, MAX_HOLD_H, FEE = 1.5, 1.5, 24, 0.001
 N_GAIN, N_LOSE, MIN_VOL = 30, 15, 20e6
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backtest")
-session = requests.Session()
+_local = threading.local()
+WORKERS = 4
+
+
+def _session():
+    if not hasattr(_local, "s"):
+        _local.s = requests.Session()
+    return _local.s
 
 
 # ---------- fetching (paced so Binance never rate-limits us) ----------
 def get(path, **params):
     for attempt in range(6):
-        r = session.get(API + path, params=params, timeout=20)
+        try:
+            r = _session().get(API + path, params=params, timeout=20)
+        except requests.RequestException:
+            time.sleep(3 * (attempt + 1))
+            continue
         if r.status_code in (418, 429):
             time.sleep(int(r.headers.get("Retry-After", 30)) + 1)
             continue
@@ -204,12 +217,16 @@ def run(days=28, progress=lambda msg: None):
     syms = [s for s in syms if tick.get(s, 0) >= 5e6 or s in sc.LEAD]
     progress(f"Step 1/3: hourly prices for {len(syms)} coins…")
     h1 = {}
-    for n, s in enumerate(syms):
-        k = sc.safe(klines_range, s, "1h", warm1h, now)
-        if k and len(k["t"]) > 30:
-            h1[s] = k
-        if n % 100 == 99:
-            progress(f"Step 1/3: {n + 1}/{len(syms)} coins")
+    with ThreadPoolExecutor(WORKERS) as ex:
+        for n, (s, k) in enumerate(zip(syms, ex.map(lambda x: sc.safe(klines_range, x, "1h", warm1h, now), syms))):
+            if k and len(k["t"]) > 30:
+                h1[s] = k
+            if n % 50 == 49:
+                progress(f"Step 1/3: {n + 1}/{len(syms)} coins")
+    for s in sc.LEAD:                                       # the leaders are required: fetch again, loudly
+        if s not in h1:
+            h1[s] = klines_range(s, "1h", warm1h, now)
+    progress(f"Step 1/3 done: {len(h1)}/{len(syms)} coins have data")
     hours = list(range(start, now - HOUR + 1, HOUR))         # signal times (an hour has just closed)
 
     # which coins were top movers at each hour?
@@ -244,8 +261,8 @@ def run(days=28, progress=lambda msg: None):
         return d
 
     btc = detail("BTCUSDT")
-    det = {}
-    for n, s in enumerate(cands):
+
+    def full(s):
         try:
             d = detail(s)
             oi = data_range("/futures/data/openInterestHist", s, start - 6 * HOUR, now)
@@ -256,11 +273,18 @@ def run(days=28, progress=lambda msg: None):
             d["ls"] = ([int(x["timestamp"]) for x in ls], [float(x["longShortRatio"]) for x in ls])
             fr = funding_range(s, start - 9 * HOUR, now)
             d["fr"] = ([int(x["fundingTime"]) for x in fr], [float(x["fundingRate"]) for x in fr])
-            det[s] = d
+            return d
         except Exception as e:  # a delisted or brand-new coin: skip it
             progress(f"(skipped {s}: {e.__class__.__name__})")
-        if n % 25 == 24:
-            progress(f"Step 2/3: {n + 1}/{len(cands)} coins")
+            return None
+
+    det = {}
+    with ThreadPoolExecutor(WORKERS) as ex:
+        for n, (s, d) in enumerate(zip(cands, ex.map(full, cands))):
+            if d:
+                det[s] = d
+            if n % 25 == 24:
+                progress(f"Step 2/3: {n + 1}/{len(cands)} coins")
 
     progress("Step 3/3: replaying every hour…")
 
