@@ -1,33 +1,35 @@
 {
-  "date": "2026-10-27",
-  "generated_at": "2026-10-27T07:20:00+03:00",
-  "headline": "No API changes break the bot today, so the ideas give you a pre-written plan for after a loss, show how much fees take at high leverage, and flag thin coins before you enter.",
+  "date": "2026-10-28",
+  "generated_at": "2026-10-28T07:25:00+03:00",
+  "headline": "No API changes affect the bot today; the ideas end the session after 3 losses in a row, flag trades that are unusually big for you, and mark movers where price rises but sellers are hitting harder.",
   "ideas": [
     {
-      "title": "If-then plan that the bot shows you after a loss",
-      "why": "Write 2–3 rules ahead of time, like \"If I lose a trade, then I close Binance for 15 minutes.\" Plans set in if-then form have a medium-to-large effect on sticking to goals and on holding back emotional reactions. The bot repeats your rule after each loss.",
+      "title": "Three losses in a row ends the session",
+      "why": "tilt.py counts revenge trades but not loss streaks. Add a rule: 3 losses in a row means you're done for the session, and 3 red days in a row means a day off, then half size. On 25 Oct this would have stopped you after the third loss, before most of the 9 revenge trades.",
       "effort": "small",
       "area": "discipline"
     },
     {
-      "title": "Fee drag line in /report and /tilt",
-      "why": "Binance charges 0.05% taker fee on the full position size, so a 40× round trip costs about 4% of your margin before price moves (2% at 20×). Show fees paid per day against gross PnL, so overtrading days show what the extra trades cost you.",
-      "effort": "small",
-      "area": "risk"
+      "title": "\"Unusual for you\" alert from your own baseline",
+      "why": "A study of 150 day traders found that after morning losses they traded more and bigger in the afternoon, and the ones who did this most earned less. Compare each trade's leverage, size and trades-per-hour with your own 20-day median and flag anything far above it.",
+      "effort": "medium",
+      "area": "discipline"
     },
     {
-      "title": "\"Thin\" flag for movers with a wide spread",
-      "why": "Top movers are often thin coins where the spread and slippage eat a scalp. One bookTicker call covers every symbol: flag a coin when its spread is many times BTC's. At 0.25% slippage each way, a trade must move 0.5% just to break even.",
+      "title": "\"Absorbed\" flag when price rises but sellers dominate",
+      "why": "The 1h klines the scanner already downloads include taker buy volume. If price went up over the last 4 hours but net taker volume was negative on above-average volume, someone is selling into the move. Flag it and keep it out of Clean picks, with no extra API calls.",
       "effort": "small",
       "area": "scanner"
     }
   ],
   "watch": [],
   "sources": [
-    {"title": "How to Maximize Implementation Intention Effects (Gollwitzer, Wieber, Myers & McCrea)", "url": "https://www.socmot.uni-konstanz.de/sites/default/files/How-to-maximize-implementation-intention-effects.pdf"},
-    {"title": "Binance Futures Fee Structure & Fee Calculations (Binance Support)", "url": "https://www.binance.com/fr/support/articles/360033544231"},
-    {"title": "How to spot low-liquidity crypto perps before you get wrecked (Buildix)", "url": "https://www.buildix.trade/blog/how-to-spot-low-liquidity-crypto-perps-before-wrecked"},
-    {"title": "Loss-control rules (LuxAlgo)", "url": "https://www.luxalgo.com/library/concept/loss-control-rules/"},
-    {"title": "Derivatives Change Log (Binance Developers)", "url": "https://developers.binance.com/docs/derivatives/change-log"}
+    {"title": "Consecutive Loss Protocols (NexusFi)", "url": "https://nexusfi.com/a/risk-management/consecutive-loss-protocols"},
+    {"title": "Do Losses Linger? Evidence from Proprietary Stock Traders (Garvey, Murphy & Wu)", "url": "https://www.nuff.ox.ac.uk/Users/MurphyA/Do%20Losses%20Linger.pdf"},
+    {"title": "CVD Multi Exchange Percentile (TradingView open-source script)", "url": "https://il.tradingview.com/script/LTpGIOxI/"},
+    {"title": "What is Cumulative Volume Delta (CVD)? (Sharpe AI)", "url": "https://www.sharpe.ai/futures/cvd"},
+    {"title": "Binance public data: futures klines columns (GitHub)", "url": "https://github.com/binance/binance-public-data/"},
+    {"title": "Derivatives Change Log (Binance Developers)", "url": "https://developers.binance.com/docs/zh-CN/derivatives/change-log"},
+    {"title": "python-telegram-bot changelog", "url": "https://docs.python-telegram-bot.org/en/stable/changelog.html"}
   ]
 }
