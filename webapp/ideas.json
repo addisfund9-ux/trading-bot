@@ -1,35 +1,37 @@
 {
-  "date": "2026-10-28",
-  "generated_at": "2026-10-28T07:25:00+03:00",
-  "headline": "No API changes affect the bot today; the ideas end the session after 3 losses in a row, flag trades that are unusually big for you, and mark movers where price rises but sellers are hitting harder.",
+  "date": "2026-10-29",
+  "generated_at": "2026-10-29T07:20:00+03:00",
+  "headline": "No API changes break the bot today; the ideas add a one-tap mood check to the morning brief, size each trade from your stop instead of your leverage, and label newly listed coins in the scanner.",
   "ideas": [
     {
-      "title": "Three losses in a row ends the session",
-      "why": "tilt.py counts revenge trades but not loss streaks. Add a rule: 3 losses in a row means you're done for the session, and 3 red days in a row means a day off, then half size. On 25 Oct this would have stopped you after the third loss, before most of the 9 revenge trades.",
+      "title": "One-tap mood check in the 08:00 brief",
+      "why": "A study of 80 day traders found those with the strongest emotional swings after wins and losses traded significantly worse. Add 4 buttons to the brief (calm / OK / tense / tired) and later show your PnL and rule breaks by mood, so you learn which mornings to trade small or skip.",
       "effort": "small",
       "area": "discipline"
     },
     {
-      "title": "\"Unusual for you\" alert from your own baseline",
-      "why": "A study of 150 day traders found that after morning losses they traded more and bigger in the afternoon, and the ones who did this most earned less. Compare each trade's leverage, size and trades-per-hour with your own 20-day median and flag anything far above it.",
-      "effort": "medium",
-      "area": "discipline"
+      "title": "/size: position size from your stop, not your leverage",
+      "why": "Type /size 1.25 1.23 (entry, stop) and the bot works out the position that loses a fixed amount, e.g. 1 USDT, at the stop, then the margin at 10/20/40×. Leverage then only changes margin, not what you can lose, and the bot warns if liquidation sits before your stop.",
+      "effort": "small",
+      "area": "risk"
     },
     {
-      "title": "\"Absorbed\" flag when price rises but sellers dominate",
-      "why": "The 1h klines the scanner already downloads include taker buy volume. If price went up over the last 4 hours but net taker volume was negative on above-average volume, someone is selling into the move. Flag it and keep it out of Clean picks, with no extra API calls.",
+      "title": "\"New\" label for recently listed coins",
+      "why": "Coins listed less than about 33 days ago don't have enough 4h candles for EMA 200, so the scanner quietly scores them lower with no reason shown. Label them \"New\" so you know why, and treat them as extra risky: half of Binance perp listings peaked on day one.",
       "effort": "small",
       "area": "scanner"
     }
   ],
-  "watch": [],
+  "watch": [
+    "Binance lowers max leverage on 15 USDⓈ-M perps on 30 Oct at 06:30 UTC (09:30 Addis): APR, AIO, TRIA, WET and STBL go from 50× to 25×, and 10 more (incl. GOAT, TURTLE, Q) lose their top tier. Open positions are affected, so check before holding any of these through 09:30."
+  ],
   "sources": [
-    {"title": "Consecutive Loss Protocols (NexusFi)", "url": "https://nexusfi.com/a/risk-management/consecutive-loss-protocols"},
-    {"title": "Do Losses Linger? Evidence from Proprietary Stock Traders (Garvey, Murphy & Wu)", "url": "https://www.nuff.ox.ac.uk/Users/MurphyA/Do%20Losses%20Linger.pdf"},
-    {"title": "CVD Multi Exchange Percentile (TradingView open-source script)", "url": "https://il.tradingview.com/script/LTpGIOxI/"},
-    {"title": "What is Cumulative Volume Delta (CVD)? (Sharpe AI)", "url": "https://www.sharpe.ai/futures/cvd"},
-    {"title": "Binance public data: futures klines columns (GitHub)", "url": "https://github.com/binance/binance-public-data/"},
-    {"title": "Derivatives Change Log (Binance Developers)", "url": "https://developers.binance.com/docs/zh-CN/derivatives/change-log"},
+    {"title": "Fear and Greed in Financial Markets: A Clinical Study of Day-Traders (Lo, Repin & Steenbarger)", "url": "https://web.mit.edu/~alo/www/Papers/online.html"},
+    {"title": "Position sizing with leverage (Kraken Learn)", "url": "https://www.kraken.com/learn/futures-trading-position-sizing-leverage"},
+    {"title": "Perp Listings on Top CEXs: The Top Signal? (BitMEX Q1 2025 derivatives report)", "url": "https://blog.bitmex.com/2025q1-derivatives-report"},
+    {"title": "Binance to cut max leverage on USDⓈ-M perpetual contracts starting Oct 30 (Phemex)", "url": "https://phemex.com/news/article/binance-to-cut-max-leverage-on-14-usdm-perpetual-contracts-starting-oct-30-100586"},
+    {"title": "USDⓈ-M Futures Change Log (Binance Developers)", "url": "https://developers.binance.com/en/docs/products/derivatives-trading-usds-futures/change-log"},
+    {"title": "Bot API changelog (Telegram)", "url": "https://core.telegram.org/bots/api-changelog.md"},
     {"title": "python-telegram-bot changelog", "url": "https://docs.python-telegram-bot.org/en/stable/changelog.html"}
   ]
 }
