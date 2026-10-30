@@ -1,37 +1,54 @@
 {
-  "date": "2026-10-29",
-  "generated_at": "2026-10-29T07:20:00+03:00",
-  "headline": "No API changes break the bot today; the ideas add a one-tap mood check to the morning brief, size each trade from your stop instead of your leverage, and label newly listed coins in the scanner.",
+  "date": "2026-10-30",
+  "generated_at": "2026-10-30T07:25:00+03:00",
+  "headline": "No API changes break the bot today; the ideas let a tilt alert lock you out with Binance's own cooling-off, show your results by hour of day and hours into the session, and flag choppy movers where EMA alignment is mostly noise.",
   "ideas": [
     {
-      "title": "One-tap mood check in the 08:00 brief",
-      "why": "A study of 80 day traders found those with the strongest emotional swings after wins and losses traded significantly worse. Add 4 buttons to the brief (calm / OK / tense / tired) and later show your PnL and rule breaks by mood, so you learn which mornings to trade small or skip.",
+      "title": "Tilt alert offers Binance's cooling-off lock",
+      "why": "Binance Futures has a cooling-off period (1 day up to a month) that can't be lifted once set. When the bot sees a revenge pattern or a 5 USDT give-back, it should tell you to switch it on now. A lock you can't undo works when willpower doesn't, like on 25 Oct.",
       "effort": "small",
       "area": "discipline"
     },
     {
-      "title": "/size: position size from your stop, not your leverage",
-      "why": "Type /size 1.25 1.23 (entry, stop) and the bot works out the position that loses a fixed amount, e.g. 1 USDT, at the stop, then the margin at 10/20/40×. Leverage then only changes margin, not what you can lose, and the bot warns if liquidation sits before your stop.",
+      "title": "Results by hour of day and hours into the session",
+      "why": "In a trading experiment, people trading at their less alert times took riskier positions and earned about a third less. Split your PnL and rule breaks by Addis hour and by hours since your first trade, so the brief can say when you should already be done for the day.",
       "effort": "small",
-      "area": "risk"
+      "area": "discipline"
     },
     {
-      "title": "\"New\" label for recently listed coins",
-      "why": "Coins listed less than about 33 days ago don't have enough 4h candles for EMA 200, so the scanner quietly scores them lower with no reason shown. Label them \"New\" so you know why, and treat them as extra risky: half of Binance perp listings peaked on day one.",
+      "title": "\"Choppy\" flag from the 15m Choppiness Index",
+      "why": "EMA 9/21 alignment often flips back and forth in sideways chop, which is where scalps bleed. The Choppiness Index (14 bars) runs on the 15m candles the scanner already has: over 61.8 means sideways. Flag those coins and keep them out of Clean picks, with no extra API calls.",
       "effort": "small",
       "area": "scanner"
     }
   ],
   "watch": [
-    "Binance lowers max leverage on 15 USDⓈ-M perps on 30 Oct at 06:30 UTC (09:30 Addis): APR, AIO, TRIA, WET and STBL go from 50× to 25×, and 10 more (incl. GOAT, TURTLE, Q) lose their top tier. Open positions are affected, so check before holding any of these through 09:30."
+    "Binance cuts max leverage on 15 USDⓈ-M contracts today from 06:30 UTC (09:30 Addis): APR, AIO, TRIA, WET and STBL go from 50x to 25x, and 10 others (incl. GOAT, TURTLE, TRADOOR) lose their top tier. Open positions are affected."
   ],
   "sources": [
-    {"title": "Fear and Greed in Financial Markets: A Clinical Study of Day-Traders (Lo, Repin & Steenbarger)", "url": "https://web.mit.edu/~alo/www/Papers/online.html"},
-    {"title": "Position sizing with leverage (Kraken Learn)", "url": "https://www.kraken.com/learn/futures-trading-position-sizing-leverage"},
-    {"title": "Perp Listings on Top CEXs: The Top Signal? (BitMEX Q1 2025 derivatives report)", "url": "https://blog.bitmex.com/2025q1-derivatives-report"},
-    {"title": "Binance to cut max leverage on USDⓈ-M perpetual contracts starting Oct 30 (Phemex)", "url": "https://phemex.com/news/article/binance-to-cut-max-leverage-on-14-usdm-perpetual-contracts-starting-oct-30-100586"},
-    {"title": "USDⓈ-M Futures Change Log (Binance Developers)", "url": "https://developers.binance.com/en/docs/products/derivatives-trading-usds-futures/change-log"},
-    {"title": "Bot API changelog (Telegram)", "url": "https://core.telegram.org/bots/api-changelog.md"},
-    {"title": "python-telegram-bot changelog", "url": "https://docs.python-telegram-bot.org/en/stable/changelog.html"}
+    {
+      "title": "Responsible Trading (Binance Futures)",
+      "url": "https://www.binance.com/en/futures/responsible-trading"
+    },
+    {
+      "title": "How to Improve Crypto Trading Results With Binance's Responsible Trading Features (CoinCheckup)",
+      "url": "https://coincheckup.com/blog/how-to-improve-crypto-trading-results-with-binances-responsible-trading-features"
+    },
+    {
+      "title": "The pitfalls of night trading (University of Auckland)",
+      "url": "https://www.auckland.ac.nz/en/news/2020/07/20/the-pitfalls-of-night-trading.html"
+    },
+    {
+      "title": "Choppiness Index (CHOP) (TradingView Help)",
+      "url": "https://in.tradingview.com/support/solutions/43000501980-choppiness-index-chop/"
+    },
+    {
+      "title": "Binance to cut max leverage on 14 USDⓈ-M perpetual contracts starting Oct 30 (Phemex)",
+      "url": "https://phemex.com/news/article/binance-to-cut-max-leverage-on-14-usdm-perpetual-contracts-starting-oct-30-100586"
+    },
+    {
+      "title": "Bot API changelog (Telegram)",
+      "url": "https://core.telegram.org/bots/api-changelog.md"
+    }
   ]
 }
