@@ -21,6 +21,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 import backtest
 import coach
 import guard
+import hours
 import lessons
 import pump
 import extract
@@ -133,6 +134,7 @@ def schedule(app: Application, chat_id: int):
             j.schedule_removal()
     jq.run_daily(morning_job, parse_hhmm(MORNING), chat_id=chat_id, name="morning")
     jq.run_repeating(inbox_job, interval=60, first=10, chat_id=chat_id, name="inbox")
+    jq.run_repeating(busy_job, interval=3600, first=max(5, (45 - datetime.now(TZ).minute) % 60 * 60), chat_id=chat_id, name="busy")
     if LIVE:
         jq.run_repeating(guard_job, interval=20, first=15, chat_id=chat_id, name="guard")
     if LAST_ENTRY:
@@ -191,6 +193,7 @@ HELP = (
     "/report — summary + your trades on the chart (yesterday, or /report 2026-10-24)\n"
     "/chart — today's trades drawn on the price chart\n"
     "/ideas — today's research: new ideas for the bot and your trading\n"
+    "/hours — when the market is busy vs when you make money, as a chart\n"
     "/lessons — your mistakes ranked by what they cost, a rule for today, your clean-day streak\n"
     "/rings — today's trading rings (calm · wins · rules), or /rings 2026-10-24\n"
     "/tilt — revenge-trading and overtrading check (today, /tilt 2026-10-24, or /tilt week)\n"
@@ -482,6 +485,53 @@ async def pumptest_cmd(update: Update, ctx):
 async def backtest_cmd(update: Update, ctx):
     days = int(ctx.args[0]) if ctx.args and ctx.args[0].isdigit() else 28
     ctx.application.create_task(run_backtest(ctx, update.effective_chat.id, max(3, min(29, days))))
+
+
+HOURS = {"day": None, "mkt": None, "warned": None}
+
+
+async def hours_profile():
+    """Market volume by hour, refreshed once a day (it shifts when US clocks change)."""
+    if HOURS["day"] != today().isoformat() or not HOURS["mkt"]:
+        HOURS["mkt"] = await asyncio.to_thread(hours.market_profile)
+        HOURS["day"] = today().isoformat()
+    return HOURS["mkt"]
+
+
+@owner_only
+async def hours_cmd(update: Update, ctx):
+    msg = await update.message.reply_text("Reading 14 days of hourly volume on the 40 most-traded coins…")
+    try:
+        mkt = await hours_profile()
+        mine = hours.my_profile(store.positions_for(con, "2000-01-01", "2100-01-01"))
+        png = await asyncio.to_thread(hours.chart, mkt, mine)
+        await msg.delete()
+        await ctx.bot.send_photo(update.effective_chat.id, png)
+        await send(ctx, update.effective_chat.id, hours.text(mkt, mine))
+    except Exception as e:
+        log.exception("hours failed")
+        await msg.edit_text(f"Couldn't build the time-of-day chart: {e}")
+
+
+async def busy_job(ctx: ContextTypes.DEFAULT_TYPE):
+    """15 minutes before the market's busiest hour, remind you what that window has done to your account."""
+    try:
+        mkt = await hours_profile()
+    except Exception:
+        return
+    peak = max(mkt, key=lambda h: mkt[h]["vol"])
+    now = datetime.now(TZ)
+    if (now.hour + 1) % 24 != peak or HOURS["warned"] == today().isoformat():
+        return
+    HOURS["warned"] = today().isoformat()
+    mine = hours.my_profile(store.positions_for(con, "2000-01-01", "2100-01-01"))
+    w = hours.window(mine, peak, min(24, peak + 3))
+    rec = (f" Your record in this window: {w['n']} trades, {w['pnl']:+.2f}, {w['wins'] / w['n'] * 100:.0f}% won."
+           if w["n"] else "")
+    await ctx.bot.send_message(ctx.job.chat_id,
+        f"⏰ <b>In 15 minutes the market's busiest hour starts</b> ({peak:02d}:00, {mkt[peak]['vol']:.1f}× normal volume)."
+        + rec + " Bigger, faster swings. Your plan: no new trades in this window — if something is open, its stop is set.",
+        parse_mode=ParseMode.HTML)
 
 
 @owner_only
@@ -865,7 +915,7 @@ def main():
     app.add_error_handler(on_error)
     app.add_handler(CommandHandler("start", start))
     for name, fn in [("help", help_cmd), ("rules", rules_cmd), ("today", today_cmd), ("yesterday", yesterday_cmd),
-                     ("day", day_cmd), ("week", week_cmd), ("scan", scan_cmd), ("backtest", backtest_cmd), ("pumptest", pumptest_cmd), ("guard", guard_cmd), ("lessons", lessons_cmd), ("rings", rings_cmd), ("morning", morning_cmd),
+                     ("day", day_cmd), ("week", week_cmd), ("scan", scan_cmd), ("backtest", backtest_cmd), ("pumptest", pumptest_cmd), ("guard", guard_cmd), ("hours", hours_cmd), ("lessons", lessons_cmd), ("rings", rings_cmd), ("morning", morning_cmd),
                      ("report", report_cmd), ("chart", chart_cmd), ("tilt", tilt_cmd), ("ideas", ideas_cmd),
                      ("undo", undo_cmd), ("export", export_cmd)]:
         app.add_handler(CommandHandler(name, fn))

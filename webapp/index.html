@@ -242,6 +242,7 @@ h3.sect{font-size:16px;margin:26px 2px 10px;color:var(--fog)}
     <label class="sub chk"><input type="checkbox" id="pAll"> Show coins with no direction</label>
   </div>
   <div class="status" id="pstatus"></div>
+  <div class="pintro" style="padding:12px 14px"><b>Market clock</b> <span class="sub">— volume by hour, Addis time, last 14 days (1.0 = normal). White bar = now, amber = busiest.</span><div id="clock" style="margin-top:8px"><span class="sub">Loading…</span></div></div>
   <h3 class="sect" style="margin-top:6px">Coiling <span class="sub" style="font-weight:500">— the ON pattern</span></h3>
   <p class="sub" style="margin:0 2px 10px">Tight range for 3 hours (5% or less), open interest up 3%+, buyers more aggressive than sellers (1.1×+), normal funding. <b>Waking up</b> = volume 1.8× the last 3 hours. <b>Breaking out</b> = above the range on 2× volume. Checked every 5 minutes.</p>
   <div class="sub" id="ccount" style="margin:0 2px 10px"></div>
@@ -1182,16 +1183,50 @@ async function runPump(){
     for (const c of pumpLast.coins.filter(c => c.state === 'trigger')){
       if (pumpJ.some(j => j.sym === c.sym && Date.now() - j.ts < 30*60000)) continue;
       pumpJ.unshift({ id:c.sym+'-'+Date.now(), ts:Date.now(), sym:c.sym, dir:c.dir, entry:c.price, atr15:c.atr15,
-                      vol5:c.vol5, taker5:c.taker5, gap15:c.gap15, volShift:c.volShift, gapWarn:c.gapWarn, res:null });
+                      vol5:c.vol5, taker5:c.taker5, gap15:c.gap15, volShift:c.volShift, gapWarn:c.gapWarn, busy:isBusy(), res:null });
       added++;
     }
     if (added){ savePumpJ(); haptic('heavy'); }
+    try { await loadClock(); renderClock(); } catch(e){}
     if (Date.now() - coilAt > 4.5*60000) added += await runCoil();
     $('#pstatus').textContent = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}${added ? ` · ${added} new signal${added>1?'s':''} logged` : ''}`;
     renderPump(); renderPumpJ();
   } catch(e){ $('#pstatus').className = 'status err'; $('#pstatus').textContent = 'Could not reach Binance: ' + e.message; }
   btn.disabled = false; btn.textContent = 'Scan for pumps';
 }
+/* market clock: volume by hour of day (Addis time), cached once a day */
+let clock = store.get('mfs_clock', null);
+const addisHour = (t = Date.now()) => (new Date(t).getUTCHours() + 3) % 24;
+const isBusy = (t = Date.now()) => !!(clock && clock.vol[addisHour(t)] >= 1.4);
+async function loadClock(){
+  const day = new Date().toISOString().slice(0,10);
+  if (clock && clock.day === day) return clock;
+  const tick = await getJSON('/fapi/v1/ticker/24hr');
+  const syms = tick.filter(t => t.symbol.endsWith('USDT') && +t.quoteVolume >= 2e7).sort((a,b) => b.quoteVolume-a.quoteVolume).slice(0, 30).map(t => t.symbol);
+  const sum = Array(24).fill(0), n = Array(24).fill(0);
+  await pool(syms, 5, async s => { try {
+    const k = await getJSON(`/fapi/v1/klines?symbol=${s}&interval=1h&limit=336`);
+    const a = avg(k.map(x => +x[7])) || 1;
+    k.forEach(x => { const h = addisHour(+x[0]); sum[h] += (+x[7])/a; n[h]++; });
+  } catch(e){} });
+  clock = { day, vol: sum.map((v,i) => n[i] ? v/n[i] : 1) };
+  store.set('mfs_clock', clock);
+  return clock;
+}
+function renderClock(){
+  if (!clock) return;
+  const h0 = addisHour(), max = Math.max(...clock.vol), W = 340, H = 70, bw = W/24;
+  const top = [...clock.vol.keys()].sort((a,b) => clock.vol[b]-clock.vol[a]).slice(0, 4);
+  const bars = clock.vol.map((v,h) => { const bh = Math.max(2, v/max*(H-16));
+    const col = h === h0 ? 'var(--fog)' : top.includes(h) ? 'var(--amber)' : 'var(--ink3)';
+    return `<rect x="${(h*bw+1).toFixed(1)}" y="${(H-12-bh).toFixed(1)}" width="${(bw-2).toFixed(1)}" height="${bh.toFixed(1)}" rx="2" fill="${col}"/>`
+      + (h % 3 === 0 ? `<text x="${(h*bw+bw/2).toFixed(1)}" y="${H-1}" font-size="8" text-anchor="middle" fill="var(--mist)">${String(h).padStart(2,'0')}</text>` : ''); }).join('');
+  const v = clock.vol[h0];
+  const note = v >= 1.4 ? `<b class="warn">Busy hour now (${v.toFixed(1)}× normal volume).</b> Bigger, faster swings — your log shows this is where most of your losses happen.`
+    : `Now ${String(h0).padStart(2,'0')}:00 is a ${v < 0.85 ? 'quiet' : 'normal'} hour (${v.toFixed(1)}×). Busiest: ${top.sort((a,b)=>a-b).map(h => String(h).padStart(2,'0')+':00').join(', ')}.`;
+  $('#clock').innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;max-width:520px">${bars}</svg><p class="sub" style="margin:6px 0 0">${note}</p>`;
+}
+
 /* coiling section */
 let coilLast = null, coilAt = 0;
 const CSTATE = { breakout:0, waking:1, coiling:2, none:3 };
@@ -1231,7 +1266,7 @@ async function runCoil(){
   for (const c of coilLast.coins.filter(c => c.state === 'waking' || c.state === 'breakout')){
     if (pumpJ.some(j => j.sym === c.sym && j.kind === 'coil' && Date.now() - j.ts < 4*3600e3)) continue;
     pumpJ.unshift({ id:c.sym+'-c'+Date.now(), ts:Date.now(), kind:'coil', state:c.state, sym:c.sym, dir:1, entry:c.price, atr15:c.atr15,
-                    range:c.range, oiCh:c.oiCh, taker:c.taker, vol:c.vol, res:null });
+                    range:c.range, oiCh:c.oiCh, taker:c.taker, vol:c.vol, busy:isBusy(), res:null });
     added++;
   }
   if (added){ savePumpJ(); haptic('heavy'); }
@@ -1246,12 +1281,14 @@ function renderPumpJ(){
   $('#pjstats').innerHTML = `<div class="stat"><div class="sub">Triggers logged</div><div class="v mono">${pumpJ.length}</div><div class="sub">${done.length} finished</div></div>`
     + line('All triggers', st(pumpJ)) + line('With volume shift', st(pumpJ.filter(j => j.volShift)))
     + line('With wide EMA gap', st(pumpJ.filter(j => j.gapWarn)))
-    + line('Coils waking / breaking out', st(pumpJ.filter(j => j.kind === 'coil')));
+    + line('Coils waking / breaking out', st(pumpJ.filter(j => j.kind === 'coil')))
+    + line('Signals in busy hours', st(pumpJ.filter(j => j.busy === true)))
+    + line('Signals in calm hours', st(pumpJ.filter(j => j.busy === false)));
   const oc = r => !r ? '<span class="sub">not checked</span>' : r.outcome==='target' ? '<span class="pill p-long">TARGET</span>' : r.outcome==='stop' ? '<span class="pill p-short">STOPPED</span>' : r.outcome==='expired' ? `<span class="pill p-mixed">2h: ${r.r>=0?'+':''}${r.r.toFixed(2)}R</span>` : `<span class="pill p-info">open ${r.r>=0?'+':''}${(r.r||0).toFixed(2)}R</span>`;
   $('#pjtbl tbody').innerHTML = pumpJ.length ? pumpJ.map(j => `<tr>
     <td class="mono">${new Date(j.ts).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td>
     <td class="mono"><b>${j.sym.replace('USDT','')}</b></td>
-    <td>${j.kind==='coil'?`<span class="pill p-warn">COIL ${j.state==='breakout'?'BREAKOUT':'WAKING'}</span>`:''}<span class="pill ${j.dir>0?'p-long':'p-short'}">${j.dir>0?'LONG':'SHORT'}</span>${j.volShift?'<span class="pill p-info">volume</span>':''}${j.gapWarn?'<span class="pill p-warn">wide gap</span>':''}</td>
+    <td>${j.kind==='coil'?`<span class="pill p-warn">COIL ${j.state==='breakout'?'BREAKOUT':'WAKING'}</span>`:''}<span class="pill ${j.dir>0?'p-long':'p-short'}">${j.dir>0?'LONG':'SHORT'}</span>${j.volShift?'<span class="pill p-info">volume</span>':''}${j.gapWarn?'<span class="pill p-warn">wide gap</span>':''}${j.busy?'<span class="pill p-mixed">busy hour</span>':''}</td>
     <td class="num mono">${fmtP(j.entry)}</td><td class="num mono">${sgn(j.res?.m15)}</td><td class="num mono">${sgn(j.res?.m60)}</td>
     <td>${oc(j.res)}</td><td><a href="${tvUrl(j.sym)}" target="_blank" rel="noopener">chart ↗</a></td></tr>`).join('')
     : '<tr><td colspan="8" class="sub">No triggers yet. Each scan logs fresh triggers here, so you can see later whether they really came before the pump.</td></tr>';
