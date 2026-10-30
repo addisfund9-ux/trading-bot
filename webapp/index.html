@@ -242,6 +242,11 @@ h3.sect{font-size:16px;margin:26px 2px 10px;color:var(--fog)}
     <label class="sub chk"><input type="checkbox" id="pAll"> Show coins with no direction</label>
   </div>
   <div class="status" id="pstatus"></div>
+  <h3 class="sect" style="margin-top:6px">Coiling <span class="sub" style="font-weight:500">— the ON pattern</span></h3>
+  <p class="sub" style="margin:0 2px 10px">Tight range for 3 hours (5% or less), open interest up 3%+, buyers more aggressive than sellers (1.1×+), normal funding. <b>Waking up</b> = volume 1.8× the last 3 hours. <b>Breaking out</b> = above the range on 2× volume. Checked every 5 minutes.</p>
+  <div class="sub" id="ccount" style="margin:0 2px 10px"></div>
+  <ol class="coins" id="ccoins"></ol>
+  <h3 class="sect">EMA trigger</h3>
   <div class="sub" id="pcount" style="margin:0 2px 10px"></div>
   <ol class="coins" id="pcoins"></ol>
   <h3 class="sect">Pump journal</h3>
@@ -668,6 +673,31 @@ function pumpEvaluate(e, k){
   }
   res.r -= 0.001 * e.entry / risk;                      // fees, like the test
   return res;
+}
+
+/* ================= coiling (learned from ON, 30 Oct) =================
+   Before ON jumped +26% it spent hours in a tight range while open interest crept up, buyers were the
+   aggressive side, funding stayed normal, and then volume woke up. One example — the journal tests it. */
+const COIL = { range:5, oi:3, taker:1.1, fundLo:-0.01, fundHi:0.03, wake:1.8 };
+async function coilAnalyse(sym, funding){
+  const [k, oi, tb] = await Promise.all([
+    getJSON(`/fapi/v1/klines?symbol=${sym}&interval=5m&limit=37`),
+    getJSON(`/futures/data/openInterestHist?symbol=${sym}&period=5m&limit=37`),
+    getJSON(`/futures/data/takerlongshortRatio?symbol=${sym}&period=5m&limit=12`)]);
+  const n = k.length; if (n < 30 || oi.length < 10) return null;
+  const c = k.map(x=>+x[4]), h = k.map(x=>+x[2]), l = k.map(x=>+x[3]), q = k.map(x=>+x[7]);
+  const hi = Math.max(...h.slice(0, n-3)), lo = Math.min(...l.slice(0, n-3));
+  const range = (hi/lo - 1) * 100;
+  const vol = avg(q.slice(n-3)) / (avg(q.slice(0, n-3)) || 1e-9);
+  const o = oi.map(x => +x.sumOpenInterestValue), oiCh = (o[o.length-1]/o[0] - 1) * 100;
+  const taker = avg(tb.map(x => +x.buySellRatio));
+  const fund = funding == null ? null : funding * 100;
+  const price = c[n-1];
+  const atr5 = atr(h, l, c);
+  const coiled = range <= COIL.range && oiCh >= COIL.oi && taker >= COIL.taker && fund != null && fund > COIL.fundLo && fund < COIL.fundHi;
+  const state = !coiled ? 'none' : price > hi && vol >= 2 ? 'breakout' : vol >= COIL.wake ? 'waking' : 'coiling';
+  const score = oiCh + (taker-1)*10 + Math.min(vol,3)*2 - range*0.5;
+  return { sym, price, range, vol, oiCh, taker, fund, hi, lo, state, score, atr15: atr5 * Math.sqrt(3), spark: c };
 }
 
 /* ================= UI ================= */
@@ -1156,23 +1186,72 @@ async function runPump(){
       added++;
     }
     if (added){ savePumpJ(); haptic('heavy'); }
-    $('#pstatus').textContent = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}${added ? ` · ${added} new trigger${added>1?'s':''} logged` : ''}`;
+    if (Date.now() - coilAt > 4.5*60000) added += await runCoil();
+    $('#pstatus').textContent = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}${added ? ` · ${added} new signal${added>1?'s':''} logged` : ''}`;
     renderPump(); renderPumpJ();
   } catch(e){ $('#pstatus').className = 'status err'; $('#pstatus').textContent = 'Could not reach Binance: ' + e.message; }
   btn.disabled = false; btn.textContent = 'Scan for pumps';
 }
+/* coiling section */
+let coilLast = null, coilAt = 0;
+const CSTATE = { breakout:0, waking:1, coiling:2, none:3 };
+function coilCard(c){
+  const badge = c.state === 'breakout' ? '<span class="pbadge go">🚀 Breaking out</span>' : c.state === 'waking' ? '<span class="pbadge on">Waking up</span>' : '<span class="pbadge wait">Coiling</span>';
+  return `<li class="coin pcoin ${c.state === 'breakout' ? 'trigger' : ''}">
+    <div class="top"><span class="tick">${c.sym.replace('USDT','')}</span><span class="side l">Buyers in control</span><div class="score">${badge}</div></div>
+    <div class="spark" aria-hidden="true">${sparkSVG({c:c.spark, e1:[]}, 1)}</div>
+    <div class="nums second">
+      <div>${c.range.toFixed(1)}%<small>Range 3h</small></div>
+      <div class="up">${sgn(c.oiCh,1)}<small>Open interest 3h</small></div>
+      <div>${c.taker.toFixed(2)}×<small>Buyers vs sellers</small></div>
+      <div class="${c.vol>=COIL.wake?'up':''}">${c.vol.toFixed(1)}×<small>Volume 15m</small></div>
+    </div>
+    <p class="sub" style="margin:10px 0 0">Range ${fmtP(c.lo)}–${fmtP(c.hi)} · funding ${c.fund.toFixed(3)}% · <a href="${tvUrl(c.sym)}" target="_blank" rel="noopener">Open chart ↗</a></p>
+  </li>`;
+}
+function renderCoils(){
+  if (!coilLast) return;
+  const hits = coilLast.coins.filter(c => c.state !== 'none').sort((a,b) => CSTATE[a.state]-CSTATE[b.state] || b.score-a.score);
+  $('#ccount').innerHTML = `Checked ${coilLast.coins.length} coins at ${new Date(coilLast.at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} · <b>${hits.length}</b> coiling`;
+  $('#ccoins').innerHTML = hits.length ? hits.map(coilCard).join('')
+    : '<li class="empty"><b>Nothing coiling right now.</b>No coin has a tight range with open interest rising and buyers in control. Most of the time that\'s the answer.</li>';
+}
+async function runCoil(){
+  const tick = await getJSON('/fapi/v1/ticker/24hr');
+  const prem = await safe(getJSON('/fapi/v1/premiumIndex')) || [];
+  const fund = new Map(prem.map(p => [p.symbol, +p.lastFundingRate]));
+  const syms = tick.filter(t => t.symbol.endsWith('USDT') && !['BTCUSDT','ETHUSDT'].includes(t.symbol) && +t.quoteVolume >= 5e6)
+    .sort((a,b) => b.quoteVolume - a.quoteVolume).slice(0, 120).map(t => t.symbol);
+  let done = 0;
+  const res = await pool(syms, 6, async s => {
+    try { const a = await coilAnalyse(s, fund.get(s)); $('#pstatus').textContent = `Looking for coils ${++done}/${syms.length}`; return a; }
+    catch(e){ done++; return null; } });
+  coilLast = { at: Date.now(), coins: res.filter(Boolean) }; coilAt = Date.now();
+  let added = 0;
+  for (const c of coilLast.coins.filter(c => c.state === 'waking' || c.state === 'breakout')){
+    if (pumpJ.some(j => j.sym === c.sym && j.kind === 'coil' && Date.now() - j.ts < 4*3600e3)) continue;
+    pumpJ.unshift({ id:c.sym+'-c'+Date.now(), ts:Date.now(), kind:'coil', state:c.state, sym:c.sym, dir:1, entry:c.price, atr15:c.atr15,
+                    range:c.range, oiCh:c.oiCh, taker:c.taker, vol:c.vol, res:null });
+    added++;
+  }
+  if (added){ savePumpJ(); haptic('heavy'); }
+  renderCoils();
+  return added;
+}
+
 function renderPumpJ(){
   const done = pumpJ.filter(j => j.res && j.res.outcome !== 'open');
   const st = g => { const d = g.filter(j => j.res && j.res.outcome !== 'open'); return d.length ? { n:d.length, win:d.filter(j=>j.res.r>0).length/d.length, avg:d.reduce((s,j)=>s+j.res.r,0)/d.length } : null; };
   const line = (lab, s) => `<div class="stat"><div class="sub">${lab}</div><div class="v mono ${s && s.avg>=0?'up':'dn'}">${s ? (s.avg>=0?'+':'')+s.avg.toFixed(2)+'R' : '–'}</div><div class="sub">${s ? `${s.n} finished · ${Math.round(s.win*100)}% won` : 'no finished triggers yet'}</div></div>`;
   $('#pjstats').innerHTML = `<div class="stat"><div class="sub">Triggers logged</div><div class="v mono">${pumpJ.length}</div><div class="sub">${done.length} finished</div></div>`
     + line('All triggers', st(pumpJ)) + line('With volume shift', st(pumpJ.filter(j => j.volShift)))
-    + line('With wide EMA gap', st(pumpJ.filter(j => j.gapWarn)));
+    + line('With wide EMA gap', st(pumpJ.filter(j => j.gapWarn)))
+    + line('Coils waking / breaking out', st(pumpJ.filter(j => j.kind === 'coil')));
   const oc = r => !r ? '<span class="sub">not checked</span>' : r.outcome==='target' ? '<span class="pill p-long">TARGET</span>' : r.outcome==='stop' ? '<span class="pill p-short">STOPPED</span>' : r.outcome==='expired' ? `<span class="pill p-mixed">2h: ${r.r>=0?'+':''}${r.r.toFixed(2)}R</span>` : `<span class="pill p-info">open ${r.r>=0?'+':''}${(r.r||0).toFixed(2)}R</span>`;
   $('#pjtbl tbody').innerHTML = pumpJ.length ? pumpJ.map(j => `<tr>
     <td class="mono">${new Date(j.ts).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td>
     <td class="mono"><b>${j.sym.replace('USDT','')}</b></td>
-    <td><span class="pill ${j.dir>0?'p-long':'p-short'}">${j.dir>0?'LONG':'SHORT'}</span>${j.volShift?'<span class="pill p-info">volume</span>':''}${j.gapWarn?'<span class="pill p-warn">wide gap</span>':''}</td>
+    <td>${j.kind==='coil'?`<span class="pill p-warn">COIL ${j.state==='breakout'?'BREAKOUT':'WAKING'}</span>`:''}<span class="pill ${j.dir>0?'p-long':'p-short'}">${j.dir>0?'LONG':'SHORT'}</span>${j.volShift?'<span class="pill p-info">volume</span>':''}${j.gapWarn?'<span class="pill p-warn">wide gap</span>':''}</td>
     <td class="num mono">${fmtP(j.entry)}</td><td class="num mono">${sgn(j.res?.m15)}</td><td class="num mono">${sgn(j.res?.m60)}</td>
     <td>${oc(j.res)}</td><td><a href="${tvUrl(j.sym)}" target="_blank" rel="noopener">chart ↗</a></td></tr>`).join('')
     : '<tr><td colspan="8" class="sub">No triggers yet. Each scan logs fresh triggers here, so you can see later whether they really came before the pump.</td></tr>';
@@ -1194,7 +1273,7 @@ $('#pEval').onclick = async () => {
 };
 $('#pClr').onclick = () => { if (confirm('Delete the pump journal?')){ pumpJ = []; savePumpJ(); renderPumpJ(); } };
 
-window.__mfsTest = { isClean, renderCoins, dayKey, setLast: v => { last = v; }, setPump: v => { pumpLast = v; }, renderPump, renderPumpJ, setPumpJ: v => { pumpJ = v; } };  // used by automated checks only
+window.__mfsTest = { isClean, renderCoins, dayKey, setLast: v => { last = v; }, setPump: v => { pumpLast = v; }, renderPump, renderPumpJ, setPumpJ: v => { pumpJ = v; }, setCoil: v => { coilLast = v; }, renderCoils };  // used by automated checks only
 }
 
 /* ===== Telegram Mini App glue ===== */
