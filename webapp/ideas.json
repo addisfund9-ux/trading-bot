@@ -1,54 +1,37 @@
 {
-  "date": "2026-10-30",
-  "generated_at": "2026-10-30T07:25:00+03:00",
-  "headline": "No API changes break the bot today; the ideas let a tilt alert lock you out with Binance's own cooling-off, show your results by hour of day and hours into the session, and flag choppy movers where EMA alignment is mostly noise.",
+  "date": "2026-10-31",
+  "generated_at": "2026-10-31T07:28:00+03:00",
+  "headline": "No API changes break the bot today; the ideas add weekend rules to the brief, show when each coin's funding is charged and how often, and split your results into coins from the morning list versus coins you chased.",
   "ideas": [
     {
-      "title": "Tilt alert offers Binance's cooling-off lock",
-      "why": "Binance Futures has a cooling-off period (1 day up to a month) that can't be lifted once set. When the bot sees a revenge pattern or a 5 USDT give-back, it should tell you to switch it on now. A lock you can't undo works when willpower doesn't, like on 25 Oct.",
+      "title": "Weekend rules in the Saturday and Sunday brief",
+      "why": "Weekend crypto volume is now only about 13% of the week, so books on small coins are thinner and wicks run further. On Sat/Sun the brief could switch to weekend rules: fewer trades, a lower leverage cap, and low-volume movers hidden from Clean picks.",
       "effort": "small",
-      "area": "discipline"
+      "area": "risk"
     },
     {
-      "title": "Results by hour of day and hours into the session",
-      "why": "In a trading experiment, people trading at their less alert times took riskier positions and earned about a third less. Split your PnL and rule breaks by Addis hour and by hours since your first trade, so the brief can say when you should already be done for the day.",
-      "effort": "small",
-      "area": "discipline"
-    },
-    {
-      "title": "\"Choppy\" flag from the 15m Choppiness Index",
-      "why": "EMA 9/21 alignment often flips back and forth in sideways chop, which is where scalps bleed. The Choppiness Index (14 bars) runs on the 15m candles the scanner already has: over 61.8 means sideways. Flag those coins and keep them out of Clean picks, with no extra API calls.",
+      "title": "Funding clock on each scanner card",
+      "why": "Some coins charge funding every 4h or 1h, not 8h, and at 40× one 0.1% payment costs 4% of your margin. Show \"funding 0.10%/4h, in 12 min\" on each card and flag high funding about to settle, using data the scanner already fetches plus one free call.",
       "effort": "small",
       "area": "scanner"
+    },
+    {
+      "title": "On-list vs off-list trades",
+      "why": "Research finds people mostly buy what grabs their attention: big movers and volume spikes. Save each morning's scanner picks and split your PnL and revenge trades by coins on the list vs off it, so you can see what chasing off-plan coins costs you.",
+      "effort": "small",
+      "area": "discipline"
     }
   ],
-  "watch": [
-    "Binance cuts max leverage on 15 USDⓈ-M contracts today from 06:30 UTC (09:30 Addis): APR, AIO, TRIA, WET and STBL go from 50x to 25x, and 10 others (incl. GOAT, TURTLE, TRADOOR) lose their top tier. Open positions are affected."
-  ],
+  "watch": [],
   "sources": [
-    {
-      "title": "Responsible Trading (Binance Futures)",
-      "url": "https://www.binance.com/en/futures/responsible-trading"
-    },
-    {
-      "title": "How to Improve Crypto Trading Results With Binance's Responsible Trading Features (CoinCheckup)",
-      "url": "https://coincheckup.com/blog/how-to-improve-crypto-trading-results-with-binances-responsible-trading-features"
-    },
-    {
-      "title": "The pitfalls of night trading (University of Auckland)",
-      "url": "https://www.auckland.ac.nz/en/news/2020/07/20/the-pitfalls-of-night-trading.html"
-    },
-    {
-      "title": "Choppiness Index (CHOP) (TradingView Help)",
-      "url": "https://in.tradingview.com/support/solutions/43000501980-choppiness-index-chop/"
-    },
-    {
-      "title": "Binance to cut max leverage on 14 USDⓈ-M perpetual contracts starting Oct 30 (Phemex)",
-      "url": "https://phemex.com/news/article/binance-to-cut-max-leverage-on-14-usdm-perpetual-contracts-starting-oct-30-100586"
-    },
-    {
-      "title": "Bot API changelog (Telegram)",
-      "url": "https://core.telegram.org/bots/api-changelog.md"
-    }
+    {"title": "Binance Derivatives API — Change Log", "url": "https://developers.binance.com/docs/derivatives/change-log"},
+    {"title": "Binance USDⓈ-M Futures — Get Funding Info (GET /fapi/v1/fundingInfo)", "url": "https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Get-Funding-Rate-Info"},
+    {"title": "Binance USDⓈ-M Futures — Mark Price (GET /fapi/v1/premiumIndex)", "url": "https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Mark-Price"},
+    {"title": "The funding-rate gotcha that breaks 30% of Python crypto scrapers: per-symbol intervals (DEV Community)", "url": "https://dev.to/foxyyybusiness/the-funding-rate-gotcha-that-breaks-30-of-python-crypto-scrapers-per-symbol-intervals-54cj"},
+    {"title": "Bitsgap — Weekend Liquidity: What Thin Order Books Do to Your Bot", "url": "https://bitsgap.com/blog/weekend-liquidity-what-thin-order-books-do-to-your-bot"},
+    {"title": "Decrypt — Nobody Trades Bitcoin on Weekends Anymore (Kaiko data)", "url": "https://decrypt.co/219288/bitcoin-crypto-weekend-trading-liquidity-kaiko?amp=1"},
+    {"title": "Barber & Odean (2008), All That Glitters — Review of Financial Studies (RePEc)", "url": "https://ideas.repec.org/a/oup/rfinst/v21y2008i2p785-818.html"},
+    {"title": "Telegram Bot API changelog", "url": "https://core.telegram.org/bots/api-changelog.md"},
+    {"title": "python-telegram-bot releases", "url": "https://github.com/python-telegram-bot/python-telegram-bot/releases"}
   ]
 }
