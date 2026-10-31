@@ -174,6 +174,20 @@ li.dropped .tick{font-size:13px;font-weight:700;margin-right:4px}
 button.btn.primary{background:var(--fog);color:var(--ink);font-weight:800}
 button.btn.primary:disabled{opacity:.6}
 h3.sect{font-size:16px;margin:26px 2px 10px;color:var(--fog)}
+/* ---------- check a trade ---------- */
+.tmform{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px 10px;margin:10px 0 12px}
+.tmform .field{flex-direction:column;align-items:stretch;gap:4px;border:0;padding:0;font-size:12px;color:var(--mist)}
+.tmform input,.tmform select{width:100%!important;background:var(--ink);border:1px solid var(--line);color:var(--fog);padding:8px;border-radius:8px;font-size:15px;text-align:left!important;box-sizing:border-box}
+.verdict{display:flex;align-items:center;gap:12px;border-radius:10px;padding:10px 14px;flex-wrap:wrap}
+.verdict b{font-size:22px;font-weight:800;letter-spacing:.04em}
+.verdict span{font-size:13px;color:var(--fog)}
+.go-pass{background:rgba(47,211,165,.14)} .go-pass b{color:var(--long)}
+.go-warn{background:rgba(255,181,71,.14)} .go-warn b{color:var(--amber)}
+.go-block{background:rgba(255,107,107,.16)} .go-block b{color:var(--short)}
+.checks{list-style:none;margin:10px 0 0;padding:0;font-size:13px;line-height:1.5}
+.checks li{padding:3px 0} .checks .pass{color:var(--fog)} .checks .warn{color:var(--amber)} .checks .block{color:var(--short)}
+.odds .bar{display:flex;width:100%;height:10px;border-radius:5px;overflow:hidden;background:var(--ink3);margin:6px 0 10px}
+.odds .bar i{display:block;height:100%;flex:none} .odds .t{background:var(--long)} .odds .n{background:var(--mist);opacity:.5} .odds .s{background:var(--short)}
 </style>
 </head>
 <body>
@@ -243,6 +257,20 @@ h3.sect{font-size:16px;margin:26px 2px 10px;color:var(--fog)}
   </div>
   <div class="status" id="pstatus"></div>
   <div class="pintro" style="padding:12px 14px"><b>Market clock</b> <span class="sub">— volume by hour, Addis time, last 14 days (1.0 = normal). White bar = now, amber = busiest.</span><div id="clock" style="margin-top:8px"><span class="sub">Loading…</span></div></div>
+  <div class="pintro" id="tmBox" style="padding:14px">
+    <b>Check a trade</b> <span class="sub">— Time Machine odds + risk check, before you enter</span>
+    <div class="tmform">
+      <label class="field">Coin <input id="tmSym" placeholder="ON" autocapitalize="characters"></label>
+      <label class="field">Side <select id="tmSide"><option value="long">Long</option><option value="short">Short</option></select></label>
+      <label class="field">Setup <select id="tmSetup"><option value="trigger">EMA trigger</option><option value="coil">Coil breakout</option><option value="any">Any moment</option></select></label>
+      <label class="field">Stop (× 15m ATR) <input id="tmStop" type="number" value="1.5" step="0.25" min="0.5"></label>
+      <label class="field">Target (R) <input id="tmR" type="number" value="1.5" step="0.25" min="0.5"></label>
+      <label class="field">Hold <select id="tmHold"><option value="30">30 min</option><option value="60">1 h</option><option value="120" selected>2 h</option><option value="240">4 h</option></select></label>
+      <label class="field">Leverage <input id="tmLev" type="number" value="10" min="1" max="125"></label>
+    </div>
+    <button class="btn primary" id="tmRun">Check odds &amp; risk</button>
+    <div id="tmOut" style="margin-top:12px"></div>
+  </div>
   <h3 class="sect" style="margin-top:6px">Coiling <span class="sub" style="font-weight:500">— the ON pattern</span></h3>
   <p class="sub" style="margin:0 2px 10px">Tight range for 3 hours (5% or less), open interest up 3%+, buyers more aggressive than sellers (1.1×+), normal funding. <b>Waking up</b> = volume 1.8× the last 3 hours. <b>Breaking out</b> = above the range on 2× volume. Checked every 5 minutes.</p>
   <div class="sub" id="ccount" style="margin:0 2px 10px"></div>
@@ -701,6 +729,131 @@ async function coilAnalyse(sym, funding){
   return { sym, price, range, vol, oiCh, taker, fund, hi, lo, state, score, atr15: atr5 * Math.sqrt(3), spark: c };
 }
 
+/* ================= Time Machine + pre-trade risk check =================
+   Idea from the Day Trader skill (Jakeschincariol/day-trader-skill), rebuilt for Binance futures.
+   1) Replay: 10,000 possible next-2-hours paths built from this coin's own 5-minute candles of the last ~2 weeks,
+      each step drawn from the SAME hour of day (so the busy US-open hours bring their bigger swings with them).
+      Drift is removed, so the replay measures room-to-move, not a guess at direction.
+   2) History: every past moment on this coin when the same setup fired, played out with the same stop and target,
+      split into busy and calm hours.
+   3) Risk check: stop, size for your risk, leverage and liquidation, your time rules, the odds → PASS / WARN / BLOCK. */
+async function tmFetch(sym){
+  let end = Date.now(), all = [];
+  for (let i = 0; i < 3; i++){
+    const k = await getJSON(`/fapi/v1/klines?symbol=${sym}&interval=5m&limit=1500&endTime=${end}`);
+    if (!k.length) break;
+    all = k.concat(all); end = k[0][0] - 1;
+    if (k.length < 1500) break;
+  }
+  return { t:all.map(x=>+x[0]), o:all.map(x=>+x[1]), h:all.map(x=>+x[2]), l:all.map(x=>+x[3]), c:all.map(x=>+x[4]), q:all.map(x=>+x[7]) };
+}
+const tmHour = t => (new Date(t).getUTCHours() + 3) % 24;
+function tmResample(k, m){            // 5m -> (5*m)m closes, keyed to the 5m index where each candle closes
+  const out = []; for (let i = m-1; i < k.c.length; i += m) out.push(i); return out;
+}
+function tmSim(k, i, dir, risk, tR, bars, fee){
+  // play out an entry at the close of 5m candle i; stop first if both hit in one candle
+  const e = k.c[i], stop = e - dir*risk, tgt = e + dir*risk*tR, feeR = fee*e/risk;
+  for (let j = i+1; j <= Math.min(i+bars, k.c.length-1); j++){
+    if (dir > 0 ? k.l[j] <= stop : k.h[j] >= stop) return -1 - feeR;
+    if (dir > 0 ? k.h[j] >= tgt : k.l[j] <= tgt) return tR - feeR;
+  }
+  const j = Math.min(i+bars, k.c.length-1);
+  return dir*(k.c[j]-e)/risk - feeR;
+}
+function tmAnalyse(k, dir, o, busyVol){
+  // o: {stopAtr, tR, holdMin, setup, paths}; busyVol: 24 numbers (market clock) or null
+  const n = k.c.length, bars = Math.round(o.holdMin/5), fee = 0.001;
+  const a5 = atr(k.h, k.l, k.c), atr15 = a5*Math.sqrt(3), risk = o.stopAtr*atr15, e = k.c[n-1];
+  // ---- 1) replay from same-hour candles, drift removed
+  const byH = Array.from({length:24}, () => []);
+  for (let i = 1; i < n; i++){
+    const p = k.c[i-1]; byH[tmHour(k.t[i])].push([Math.log(k.c[i]/p), Math.log(k.h[i]/p), Math.log(k.l[i]/p)]);
+  }
+  for (const b of byH){ if (!b.length) continue; const m = b.reduce((s,x)=>s+x[0],0)/b.length; b.forEach(x => { x[0]-=m; x[1]-=m; x[2]-=m; }); }
+  const P = o.paths || 10000, stopL = Math.log((e - dir*risk)/e), tgtL = Math.log((e + dir*risk*o.tR)/e);
+  let win = 0, loss = 0, sumR = 0; let seed = 12345; const rnd = () => (seed = (seed*1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const t0 = k.t[n-1] + 300000;
+  for (let p = 0; p < P; p++){
+    let x = 0, done = false;
+    for (let s = 0; s < bars; s++){
+      const b = byH[tmHour(t0 + s*300000)]; if (!b.length) continue;
+      const r = b[Math.floor(rnd()*b.length)];
+      const hi = x + r[1], lo = x + r[2];
+      if (dir > 0 ? lo <= stopL : hi >= stopL){ loss++; sumR -= 1; done = true; break; }
+      if (dir > 0 ? hi >= tgtL : lo <= tgtL){ win++; sumR += o.tR; done = true; break; }
+      x += r[0];
+    }
+    if (!done) sumR += dir*(Math.exp(x)-1)*e/risk;
+  }
+  const feeR = fee*e/risk;
+  const mc = { pTarget: win/P, pStop: loss/P, pNeither: 1-(win+loss)/P, expR: sumR/P - feeR };
+  // ---- 2) history: same setup on this coin
+  const c15 = tmResample(k, 3), c60 = tmResample(k, 12);
+  const cl15 = c15.map(i => k.c[i]), cl60 = c60.map(i => k.c[i]);
+  const e5f = ema(k.c, 9), e5s = ema(k.c, 21), e15f = ema(cl15, 9), e15s = ema(cl15, 21), e60f = ema(cl60, 20), e60s = ema(cl60, 50);
+  const idx15 = new Array(n).fill(-1), idx60 = new Array(n).fill(-1);
+  for (let j = 0, q = 0; j < n; j++){ while (q+1 < c15.length && c15[q+1] <= j) q++; idx15[j] = c15[q] <= j ? q : -1; }
+  for (let j = 0, q = 0; j < n; j++){ while (q+1 < c60.length && c60[q+1] <= j) q++; idx60[j] = c60[q] <= j ? q : -1; }
+  const tr = (p, f, s) => f == null || s == null ? 0 : p > f && f > s ? 1 : p < f && f < s ? -1 : 0;
+  const aligned = j => { const a = idx15[j], b = idx60[j]; if (a < 0 || b < 0) return false;
+    return tr(k.c[j], e5f[j], e5s[j]) === dir && tr(cl15[a], e15f[a], e15s[a]) === dir && tr(cl60[b], e60f[b], e60s[b]) === dir; };
+  const coil = j => { if (j < 36) return false;
+    let hi = -Infinity, lo = Infinity, qb = 0; for (let x = j-35; x <= j-3; x++){ hi = Math.max(hi, k.h[x]); lo = Math.min(lo, k.l[x]); qb += k.q[x]; }
+    const vol = (k.q[j]+k.q[j-1]+k.q[j-2])/3 / (qb/33 || 1e-9);
+    return (hi/lo-1)*100 <= 5 && vol >= 1.8 && (dir > 0 ? k.c[j] > hi : k.c[j] < lo); };
+  const fires = j => o.setup === 'coil' ? coil(j) : o.setup === 'trigger' ? aligned(j) && !aligned(j-1) : true;
+  const res = { all:[], busy:[], calm:[] };
+  let busyUntil = -1;
+  for (let j = 60; j < n - bars; j++){
+    if (j <= busyUntil || !fires(j)) continue;
+    const r15 = atr(k.h.slice(j-60, j+1), k.l.slice(j-60, j+1), k.c.slice(j-60, j+1))*Math.sqrt(3);
+    if (!r15) continue;
+    const R = tmSim(k, j, dir, o.stopAtr*r15, o.tR, bars, fee);
+    res.all.push(R);
+    (busyVol && busyVol[tmHour(k.t[j])] >= 1.4 ? res.busy : res.calm).push(R);
+    busyUntil = j + (o.setup === 'any' ? 6 : bars);      // don't count one move many times
+  }
+  const st = v => v.length ? { n:v.length, win:v.filter(x=>x>0).length/v.length, avgR:v.reduce((s,x)=>s+x,0)/v.length } : { n:0 };
+  // ---- next hours: how busy the coming hold window is
+  const nextHours = [...new Set(Array.from({length:bars}, (_,s) => tmHour(t0 + s*300000)))];
+  const h60 = c60.map((i,q) => Math.max(...k.h.slice(q ? c60[q-1]+1 : 0, i+1))), l60 = c60.map((i,q) => Math.min(...k.l.slice(q ? c60[q-1]+1 : 0, i+1)));
+  const atr60 = atr(h60, l60, cl60), ema20 = ema(cl60, 20);
+  const stretch = atr60 && ema20.length ? (e - ema20[ema20.length-1]) / atr60 : null;
+  return { stretch, entry:e, atr15, risk, stopPx: e - dir*risk, tgtPx: e + dir*risk*o.tR, mc, hist: { all:st(res.all), busy:st(res.busy), calm:st(res.calm) },
+           days: (k.t[n-1]-k.t[0])/864e5, nextHours,
+           nextBusy: busyVol ? nextHours.some(h => busyVol[h] >= 1.4) : null };
+}
+const tmFmt = p => p >= 100 ? p.toFixed(2) : p >= 1 ? p.toFixed(4) : p.toPrecision(4);
+function riskCheck(tm, dir, o){
+  // o: {acct, riskPct, lev, lastEntry ('12:00' or ''), busyNow, hour, minute, stretch}
+  const out = [];
+  const add = (lvl, txt) => out.push({ lvl, txt });
+  const stopPct = tm.risk / tm.entry * 100;
+  add('pass', `Stop at ${tmFmt(tm.stopPx)} (${stopPct.toFixed(2)}% away) — set it when you enter.`);
+  const riskUsd = o.acct * o.riskPct / 100, qty = riskUsd / tm.risk, notional = qty * tm.entry, needLev = notional / o.acct;
+  add('pass', `Size for ${o.riskPct}% risk (${riskUsd.toFixed(2)} USDT): ${qty.toPrecision(3)} coins ≈ ${notional.toFixed(0)} USDT.`);
+  if (needLev > 20) add('block', `That size needs ${needLev.toFixed(0)}× leverage — the stop is too tight for your account. Widen the stop or skip.`);
+  const liqPct = 100 / o.lev * 0.9;             // rough isolated-margin liquidation distance
+  if (liqPct <= stopPct) add('block', `At ${o.lev}× you'd be liquidated (~${liqPct.toFixed(1)}% away) before your stop (${stopPct.toFixed(1)}%). Lower the leverage.`);
+  else add('pass', `At ${o.lev}× liquidation is ~${liqPct.toFixed(1)}% away, beyond your stop.`);
+  if (o.lastEntry){
+    const [hh, mm] = o.lastEntry.split(':').map(Number);
+    if (o.hour*60 + o.minute >= hh*60 + mm) add('block', `It's after ${o.lastEntry}. Your plan: mornings only.`);
+  }
+  if (o.busyNow) add('block', 'Busy hour right now (US open). Your record in this window is your worst.');
+  else if (tm.nextBusy) add('warn', 'The trade would run into the busy hours — expect bigger, faster swings.');
+  const h = tm.hist.all, mc = tm.mc;
+  if (h.n >= 10 && h.avgR < -0.2) add('block', `This setup has lost on this coin: ${h.n} past times, avg ${h.avgR.toFixed(2)}R.`);
+  else if (h.n >= 10 && h.avgR < 0) add('warn', `This setup has slightly lost on this coin: ${h.n} past times, avg ${h.avgR.toFixed(2)}R.`);
+  else if (h.n < 10) add('warn', `Only ${h.n} past examples of this setup on this coin — too few to trust the history.`);
+  else add('pass', `This setup has worked on this coin: ${h.n} past times, avg +${h.avgR.toFixed(2)}R.`);
+  if (o.stretch != null && dir*o.stretch > 3) add('warn', `Price is ${o.stretch.toFixed(1)} ATR from the 1h EMA20 — a late entry.`);
+  if (mc.expR < -0.1) add('warn', `The replay leans against this stop/target (expected ${mc.expR.toFixed(2)}R).`);
+  const verdict = out.some(x => x.lvl === 'block') ? 'BLOCK' : out.some(x => x.lvl === 'warn') ? 'WARN' : 'PASS';
+  return { verdict, items: out, qty, notional, needLev };
+}
+
 /* ================= UI ================= */
 if (typeof document !== 'undefined'){
 const $ = s => document.querySelector(s);
@@ -1151,7 +1304,7 @@ function pumpCard(c){
       <div class="${c.gapWarn?'warn':''}">${c.gap15==null?'–':c.gap15.toFixed(1)}<small>EMA gap 15m</small></div>
     </div>
     ${(c.volShift || c.gapWarn) ? `<div class="flags">${c.volShift ? '<span class="flag good">Volume shift</span>' : ''}${c.gapWarn ? '<span class="flag">Wide EMA gap: may be tired</span>' : ''}</div>` : ''}
-    <p class="sub" style="margin:10px 0 0"><a href="${tvUrl(c.sym)}" target="_blank" rel="noopener">Open chart ↗</a></p>
+    <p class="sub" style="margin:10px 0 0"><a href="${tvUrl(c.sym)}" target="_blank" rel="noopener">Open chart ↗</a>${c.dir ? ` · <button class="linkbtn" data-check="${c.sym}|${c.dir>0?'long':'short'}|trigger">Check odds ⏱</button>` : ''}</p>
   </li>`;
 }
 function renderPump(){
@@ -1227,6 +1380,50 @@ function renderClock(){
   $('#clock').innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;max-width:520px">${bars}</svg><p class="sub" style="margin:6px 0 0">${note}</p>`;
 }
 
+/* check-a-trade panel */
+async function runCheck(){
+  const sym = ($('#tmSym').value || '').trim().toUpperCase().replace(/USDT$/,'') + 'USDT';
+  const dir = $('#tmSide').value === 'short' ? -1 : 1;
+  const o = { stopAtr:+$('#tmStop').value || 1.5, tR:+$('#tmR').value || 1.5, holdMin:+$('#tmHold').value || 120, setup:$('#tmSetup').value, paths:10000 };
+  const btn = $('#tmRun'); btn.disabled = true; btn.textContent = 'Replaying…'; $('#tmOut').innerHTML = '<p class="sub">Downloading ~2 weeks of 5-minute candles and replaying 10,000 paths…</p>';
+  try {
+    try { await loadClock(); } catch(e){}
+    const k = await tmFetch(sym);
+    if (k.c.length < 500) throw new Error('not enough history for ' + sym);
+    const tm = tmAnalyse(k, dir, o, clock ? clock.vol : null);
+    const now = new Date(), hour = addisHour(), minute = now.getUTCMinutes();
+    const rc = riskCheck(tm, dir, { acct:+$('#acct').value || 500, riskPct:+$('#riskPct').value || 1, lev:+$('#tmLev').value || 10,
+      lastEntry:'12:00', busyNow:isBusy(), hour, minute, stretch:tm.stretch });
+    const pc = v => Math.round(v*100) + '%';
+    const hs = s => s.n ? `${s.n} times · ${pc(s.win)} won · <b class="${s.avgR>=0?'up':'dn'}">${s.avgR>=0?'+':''}${s.avgR.toFixed(2)}R</b> avg` : 'no examples';
+    const vcls = rc.verdict === 'PASS' ? 'go-pass' : rc.verdict === 'WARN' ? 'go-warn' : 'go-block';
+    const setupName = { trigger:'EMA trigger', coil:'coil breakout', any:'any moment (baseline)' }[o.setup];
+    $('#tmOut').innerHTML = `
+      <div class="verdict ${vcls}"><b>${rc.verdict}</b><span>${sym.replace('USDT','')} ${dir>0?'long':'short'} · entry ${fmtP(tm.entry)} · stop ${fmtP(tm.stopPx)} · target ${fmtP(tm.tgtPx)}</span></div>
+      <ul class="checks">${rc.items.map(x => `<li class="${x.lvl}">${x.lvl==='pass'?'✓':x.lvl==='warn'?'!':'✕'} ${x.txt}</li>`).join('')}</ul>
+      <div class="grid3" style="margin-top:12px">
+        <div class="box"><h4>⏱ Time Machine — 10,000 replays</h4>
+          <div class="odds"><div class="bar"><i class="t" style="width:${pc(tm.mc.pTarget)}"></i><i class="n" style="width:${pc(tm.mc.pNeither)}"></i><i class="s" style="width:${pc(tm.mc.pStop)}"></i></div>
+          <div class="kv mono"><span>Target first</span><span class="up">${pc(tm.mc.pTarget)}</span><span>Stop first</span><span class="dn">${pc(tm.mc.pStop)}</span>
+          <span>Neither in ${o.holdMin/60}h</span><span>${pc(tm.mc.pNeither)}</span><span>Expected</span><span>${tm.mc.expR>=0?'+':''}${tm.mc.expR.toFixed(2)}R</span></div></div>
+          <p class="sub">Built from ${sym.replace('USDT','')}'s own 5-minute candles of the last ${tm.days.toFixed(0)} days, each step taken from the same hour of day (next hours: ${tm.nextHours.map(h=>String(h).padStart(2,'0')).join(', ')}${tm.nextBusy?' — includes busy hours':''}). Direction is neutral here: it shows whether this stop and target fit how the coin moves at these hours.</p></div>
+        <div class="box"><h4>History — ${setupName} on ${sym.replace('USDT','')}</h4>
+          <div class="kv"><span>All</span><span>${hs(tm.hist.all)}</span><span>Busy hours</span><span>${hs(tm.hist.busy)}</span><span>Calm hours</span><span>${hs(tm.hist.calm)}</span></div>
+          <p class="sub">Every past moment in the last ${tm.days.toFixed(0)} days when this setup fired on this coin, played out with the same stop, target and hold, fees included.</p></div>
+      </div>
+      <p class="sub" style="margin-top:10px">Odds come from the past and change with the market. A PASS is a check, not a prediction.</p>`;
+    haptic('light');
+  } catch(e){ $('#tmOut').innerHTML = `<p class="status err">Couldn't check ${sym}: ${e.message}</p>`; }
+  btn.disabled = false; btn.textContent = 'Check odds & risk';
+}
+$('#tmRun').onclick = runCheck;
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-check]'); if (!b) return;
+  const [sym, side, setup] = b.dataset.check.split('|');
+  $('#tmSym').value = sym.replace('USDT',''); $('#tmSide').value = side; $('#tmSetup').value = setup;
+  $('#tmBox').scrollIntoView({ block:'start', behavior:'smooth' }); runCheck();
+});
+
 /* coiling section */
 let coilLast = null, coilAt = 0;
 const CSTATE = { breakout:0, waking:1, coiling:2, none:3 };
@@ -1241,7 +1438,7 @@ function coilCard(c){
       <div>${c.taker.toFixed(2)}×<small>Buyers vs sellers</small></div>
       <div class="${c.vol>=COIL.wake?'up':''}">${c.vol.toFixed(1)}×<small>Volume 15m</small></div>
     </div>
-    <p class="sub" style="margin:10px 0 0">Range ${fmtP(c.lo)}–${fmtP(c.hi)} · funding ${c.fund.toFixed(3)}% · <a href="${tvUrl(c.sym)}" target="_blank" rel="noopener">Open chart ↗</a></p>
+    <p class="sub" style="margin:10px 0 0">Range ${fmtP(c.lo)}–${fmtP(c.hi)} · funding ${c.fund.toFixed(3)}% · <a href="${tvUrl(c.sym)}" target="_blank" rel="noopener">Open chart ↗</a> · <button class="linkbtn" data-check="${c.sym}|long|coil">Check odds ⏱</button></p>
   </li>`;
 }
 function renderCoils(){
@@ -1310,7 +1507,7 @@ $('#pEval').onclick = async () => {
 };
 $('#pClr').onclick = () => { if (confirm('Delete the pump journal?')){ pumpJ = []; savePumpJ(); renderPumpJ(); } };
 
-window.__mfsTest = { isClean, renderCoins, dayKey, setLast: v => { last = v; }, setPump: v => { pumpLast = v; }, renderPump, renderPumpJ, setPumpJ: v => { pumpJ = v; }, setCoil: v => { coilLast = v; }, renderCoils };  // used by automated checks only
+window.__mfsTest = { isClean, renderCoins, dayKey, setLast: v => { last = v; }, setPump: v => { pumpLast = v; }, renderPump, renderPumpJ, setPumpJ: v => { pumpJ = v; }, setCoil: v => { coilLast = v; }, renderCoils, tmAnalyse, riskCheck };  // used by automated checks only
 }
 
 /* ===== Telegram Mini App glue ===== */
