@@ -1,35 +1,35 @@
 {
-  "date": "2026-11-03",
-  "generated_at": "2026-11-03T07:15:00+03:00",
-  "headline": "No API changes break the bot today; the ideas protect a green day once you're well up, catch the few big losers that wipe out many small wins, and grade the morning list against what the coins actually did.",
+  "date": "2026-11-04",
+  "generated_at": "2026-11-04T07:25:00+03:00",
+  "headline": "No API changes break the bot today; the ideas word tilt alerts around what you keep by waiting, set your stop from how far your own winners dipped, and show how old each coin's EMA alignment is.",
   "ideas": [
     {
-      "title": "Green-day lock once you're well up",
-      "why": "Floor traders take more risk after gains (the house money effect). Once the day is up 5 USDT, the guard keeps at least half the day's high, allows 2 more trades and no leverage above the morning's. On 25 Oct that would have locked in about +4 instead of 9 revenge trades.",
+      "title": "Tilt alerts that lead with what you keep",
+      "why": "In a 2024 UCLA study, people chose the patient option more often when the reward was shown before the wait. Reword cooldown alerts the same way: \"Keep your +6.20 today. Next entry at 14:32\" instead of \"15 min cooldown\". It's a wording change in tilt.py and guard.py.",
       "effort": "small",
       "area": "discipline"
     },
     {
-      "title": "Big-loser check: median trade vs total",
-      "why": "In Taiwan futures, the median day trade made money but the average lost, because a few big losses outweighed many small wins. /week shows your median trade and what your 5 worst trades cost, and the guard warns when an open loss passes 2× your usual loss.",
-      "effort": "small",
+      "title": "Stop distance from your own winners' worst dip",
+      "why": "For each imported trade, use klines to measure how far it went against you before closing. /week then says \"95% of your winners never dipped more than 0.6%\". A stop just past that cuts losers early without killing winners, and shows when you held a loser far past that line.",
+      "effort": "medium",
       "area": "risk"
     },
     {
-      "title": "Evening scorecard for the morning list",
-      "why": "The 21:00 reminder shows how the 08:00 brief's top 5 coins moved over the next 4 hours against the scanner's own 1.5 ATR stop and 1.5R target. After 2–4 weeks you can see whether the list and its Crowded/Stretched flags actually help, from live data rather than the backtest.",
-      "effort": "medium",
+      "title": "\"Late\" flag from the age of the EMA alignment",
+      "why": "Each scanner card shows how many 15m bars since EMA 9 crossed 21, and 1h bars since 20 crossed 50. A top mover whose alignment is 40+ bars (10h) old gets a \"Late\" flag, so you can tell a fresh trend from one that has already run while you slept.",
+      "effort": "small",
       "area": "scanner"
     }
   ],
   "watch": [],
   "sources": [
-    {"title": "Frino, Grant & Johnstone (2008) – The house money effect and local traders on the Sydney Futures Exchange", "url": "https://ro.uow.edu.au/commpapers/2060"},
-    {"title": "NexusFi – Winning streaks and overconfidence", "url": "https://nexusfi.com/a/psychology/winning-streaks-overconfidence"},
-    {"title": "Kuo & Lin – Overconfident Individual Day Traders: Evidence from the Taiwan Futures Market", "url": "https://repository.hku.hk/bitstream/10722/184789/1/content.pdf"},
-    {"title": "CXO Advisory – Performance of Futures Day Traders", "url": "https://www.cxoadvisory.com/individual-investing/performance-of-futures-day-traders/"},
-    {"title": "Binance Derivatives – Change Log", "url": "https://developers.binance.com/docs/derivatives/change-log"},
+    {"title": "ScienceDaily – Chen, Zheng, Wang & Krajbich (2024): how choices are presented affects patience", "url": "https://sciencedaily.com/releases/2024/04/240408150455.htm"},
+    {"title": "NexusFi – Maximum Adverse Excursion (MAE)", "url": "https://nexusfi.com/a/risk-management/maximum-adverse-excursion-mae"},
+    {"title": "Garvey & Murphy (2004) – Are Professional Traders Too Slow to Realize Their Losses?", "url": "https://ideas.repec.org/a/taf/ufajxx/v60y2004i4p35-43.html"},
+    {"title": "TradingView – Bars Since MA Cross (TradeStation)", "url": "https://id.tradingview.com/script/uANNtrEl-Bars-Since-MA-Cross-Can-Help-Trend-Following"},
     {"title": "Telegram – Bot API changelog", "url": "https://core.telegram.org/bots/api-changelog.md"},
-    {"title": "python-telegram-bot on PyPI", "url": "https://pypi.org/project/python-telegram-bot/"}
+    {"title": "Alpine Linux – py3-telegram-bot package (python-telegram-bot 22.8)", "url": "https://pkgs.alpinelinux.org/package/edge/testing/x86_64/py3-telegram-bot"},
+    {"title": "Binance Developer Docs – Derivatives", "url": "https://developers.binance.com/docs/derivatives"}
   ]
 }
