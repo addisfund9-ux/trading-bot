@@ -1,35 +1,21 @@
 {
-  "date": "2026-11-04",
-  "generated_at": "2026-11-04T07:25:00+03:00",
-  "headline": "No API changes break the bot today; the ideas word tilt alerts around what you keep by waiting, set your stop from how far your own winners dipped, and show how old each coin's EMA alignment is.",
+  "date": "2026-11-05",
+  "generated_at": "2026-11-05T07:12:49+03:00",
+  "headline": "Today's run couldn't open any web pages, so there's no new outside research; the two ideas below build on what the bot already does: a trade countdown and a market breadth check.",
   "ideas": [
     {
-      "title": "Tilt alerts that lead with what you keep",
-      "why": "In a 2024 UCLA study, people chose the patient option more often when the reward was shown before the wait. Reword cooldown alerts the same way: \"Keep your +6.20 today. Next entry at 14:32\" instead of \"15 min cooldown\". It's a wording change in tilt.py and guard.py.",
+      "title": "Trade budget countdown in the tilt guard",
+      "why": "Today the guard only speaks up after trade 9, when the damage is already done. Set a budget in the 08:00 brief (say 5) and get \"3 of 5 left\" after every new position, with each loss using up one extra. On 25 Oct the budget would have run out early in the revenge run.",
       "effort": "small",
       "area": "discipline"
     },
     {
-      "title": "Stop distance from your own winners' worst dip",
-      "why": "For each imported trade, use klines to measure how far it went against you before closing. /week then says \"95% of your winners never dipped more than 0.6%\". A stop just past that cuts losers early without killing winners, and shows when you held a loser far past that line.",
-      "effort": "medium",
-      "area": "risk"
-    },
-    {
-      "title": "\"Late\" flag from the age of the EMA alignment",
-      "why": "Each scanner card shows how many 15m bars since EMA 9 crossed 21, and 1h bars since 20 crossed 50. A top mover whose alignment is 40+ bars (10h) old gets a \"Late\" flag, so you can tell a fresh trend from one that has already run while you slept.",
+      "title": "Market breadth line at the top of the scanner",
+      "why": "Count how many of the scanned movers have 1h EMA 20 above EMA 50 and show \"Breadth 70% up\" in the scanner and the brief. Flag a short when most of the market is aligned up, or a long when most is aligned down. It reuses klines the scanner already fetches.",
       "effort": "small",
       "area": "scanner"
     }
   ],
   "watch": [],
-  "sources": [
-    {"title": "ScienceDaily – Chen, Zheng, Wang & Krajbich (2024): how choices are presented affects patience", "url": "https://sciencedaily.com/releases/2024/04/240408150455.htm"},
-    {"title": "NexusFi – Maximum Adverse Excursion (MAE)", "url": "https://nexusfi.com/a/risk-management/maximum-adverse-excursion-mae"},
-    {"title": "Garvey & Murphy (2004) – Are Professional Traders Too Slow to Realize Their Losses?", "url": "https://ideas.repec.org/a/taf/ufajxx/v60y2004i4p35-43.html"},
-    {"title": "TradingView – Bars Since MA Cross (TradeStation)", "url": "https://id.tradingview.com/script/uANNtrEl-Bars-Since-MA-Cross-Can-Help-Trend-Following"},
-    {"title": "Telegram – Bot API changelog", "url": "https://core.telegram.org/bots/api-changelog.md"},
-    {"title": "Alpine Linux – py3-telegram-bot package (python-telegram-bot 22.8)", "url": "https://pkgs.alpinelinux.org/package/edge/testing/x86_64/py3-telegram-bot"},
-    {"title": "Binance Developer Docs – Derivatives", "url": "https://developers.binance.com/docs/derivatives"}
-  ]
+  "sources": []
 }
