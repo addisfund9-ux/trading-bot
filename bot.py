@@ -19,6 +19,7 @@ from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 import backtest
+import brief
 import coach
 import guard
 import hours
@@ -69,6 +70,12 @@ FOCUS = os.getenv("FOCUS_NOTE", "🎯 <b>Job search comes first.</b> Trading is 
                   "at most 3 trades, mornings only, a stop on every one. You trade best when you're "
                   "focused on finding work.").strip()
 LOSS_LIMIT = float(os.getenv("DAILY_LOSS_LIMIT", "5"))       # stop after giving back this much from the day's high
+# slow and steady, from 7 Nov: small fixed size. Wednesday 4 Nov ($10–20 positions) was the green day.
+MAX_POSITION = float(os.getenv("MAX_POSITION_USD", "20"))
+MAX_LEVERAGE = int(os.getenv("MAX_LEVERAGE", "10"))
+RISK_PER_TRADE = float(os.getenv("RISK_PER_TRADE_USD", "1"))
+REST_DAY = os.getenv("REST_AFTER_STOP", "1").strip() not in ("0", "false", "no", "")
+SLOW_START = date.fromisoformat(os.getenv("SLOW_START", "2026-11-07"))
 IDEAS_URL = os.getenv("IDEAS_URL", (WEBAPP_URL.rstrip("/") + "/ideas.json") if WEBAPP_URL else "").strip()
 INBOX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox")
 SCAN_TOP = int(os.getenv("SCAN_TOP", "30"))
@@ -241,9 +248,11 @@ async def rules_cmd(update: Update, ctx):
         f"4. No more than {MAX_TRADES} trades a day" + (f", and no new trades after {LAST_ENTRY}" if LAST_ENTRY else "") + ".\n"
         f"5. Stop for the day after giving back {LOSS_LIMIT:g} USDT from the day's high.\n"
         "6. Never raise leverage after a loss.\n"
-        "7. The first broken rule ends the day.\n\n"
+        "7. The first broken rule ends the day.\n"
+        f"8. Positions up to ${MAX_POSITION:g} at up to {MAX_LEVERAGE}×, risking about ${RISK_PER_TRADE:g} each.\n"
+        "9. A day past the daily stop means the next day is a rest day.\n\n"
         "Change them in the .env file (MAX_HOLD_MIN, MAX_LOSSES_PER_COIN, COOLDOWN_MIN, PLAN_MAX_TRADES, "
-        "LAST_ENTRY_TIME, DAILY_LOSS_LIMIT).", parse_mode=ParseMode.HTML)
+        "LAST_ENTRY_TIME, DAILY_LOSS_LIMIT, MAX_POSITION_USD, MAX_LEVERAGE, RISK_PER_TRADE_USD).", parse_mode=ParseMode.HTML)
 
 
 @owner_only
@@ -755,28 +764,40 @@ async def rings_cmd(update: Update, ctx):
     await send_lessons(ctx, update.effective_chat.id, _day_arg(ctx.args, today()), full=False)
 
 
-async def morning_brief(ctx, chat_id):
-    y = (today() - timedelta(days=1)).isoformat()
-    rows, total, _ = week_data()
-    await send_report(ctx, chat_id, y, header=f"☀️ <b>Good morning, Dagi</b> — {datetime.now(TZ):%A %d %B}\n\n"
-                                              + (FOCUS + "\n\n" if FOCUS else ""))
+def plan_data():
+    """Everything the brief's first message needs (database reads stay on this thread)."""
+    y = today() - timedelta(days=1)
+    yrows = tilt_for(store.positions_for(con, y.isoformat()))["rows"]
+    days = [(SLOW_START + timedelta(days=i)).isoformat() for i in range(max(0, (today() - SLOW_START).days))]
+    by_day = {d: store.positions_for(con, d) for d in days}
+    clean = lambda pos: (lessons.day_rings(lessons.tag_trades(pos, COOLDOWN, MAX_TRADES, LOSS_LIMIT, MAX_HOLD,
+                                                               MAX_LOSSES)["rows"]) or {"clean": True})["clean"]
+    tr = brief.tracker(by_day, SLOW_START, today(), clean)
+    rule = lessons.rule_for_today(lessons_data(y))
+    s = {"max_pos": MAX_POSITION, "max_lev": MAX_LEVERAGE, "risk": RISK_PER_TRADE, "max_trades": MAX_TRADES,
+         "last_entry": LAST_ENTRY, "loss_limit": LOSS_LIMIT, "rest_day": REST_DAY}
+    return brief.text(datetime.now(TZ), FOCUS, y, yrows, s, tr, rule)
+
+
+async def morning_brief(ctx, chat_id, mark_sent=None):
+    """Slow-and-steady brief: one plan message first, then the rings and a short watchlist.
+    The full day report is still there on /report, the research ideas on /ideas."""
+    msg, rest = plan_data()
+    await send(ctx, chat_id, msg, reply_markup=webapp_markup())
+    if mark_sent:
+        mark_sent()            # the important part arrived; a network hiccup below won't resend it
     try:
         await send_lessons(ctx, chat_id, today() - timedelta(days=1), full=False)
     except Exception:
         log.exception("morning rings failed")
-    parts = [f"<b>Last 7 days:</b> {review.money(total)} USDT · /lessons for what your mistakes cost", ""]
+    if rest:
+        return                 # rest day: no watchlist, nothing to tempt you
     try:
-        parts.append(await run_scan_text())
+        res = await asyncio.to_thread(scanner.scan, SCAN_TOP, SCAN_MIN_VOL, True)
+        await send(ctx, chat_id, scanner.scan_text(res, k=3) + "\n\n<i>A watchlist, not a signal. The scanner has no "
+                   "proven edge: only take one if it fits every line of today's plan.</i>")
     except Exception as e:
         log.exception("scan failed")
-        parts.append(f"Scanner couldn't reach Binance ({e}). Try /scan later.")
-    await send(ctx, chat_id, "\n".join(parts), reply_markup=webapp_markup())
-    try:
-        txt = ideas_text(await asyncio.to_thread(fetch_ideas), today().isoformat())
-        if txt:
-            await send(ctx, chat_id, txt)
-    except Exception:
-        log.exception("ideas fetch failed")
 
 
 async def morning_job(ctx: ContextTypes.DEFAULT_TYPE):
@@ -789,11 +810,16 @@ async def send_brief_once(ctx, chat_id):
     t = today().isoformat()
     if store.get_setting(con, "last_brief") == t:
         return
-    store.set_setting(con, "last_brief", t)
+    sent = {"ok": False}
+
+    def mark():
+        sent["ok"] = True
+        store.set_setting(con, "last_brief", t)
     try:
-        await morning_brief(ctx, chat_id)
+        await morning_brief(ctx, chat_id, mark_sent=mark)
     except Exception:
-        store.set_setting(con, "last_brief", "")       # try again next minute
+        if not sent["ok"]:
+            log.warning("morning brief not delivered yet, will retry next minute")
         raise
 
 
@@ -911,7 +937,8 @@ async def on_error(update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
-    app = Application.builder().token(TOKEN).post_init(post_init).build()
+    app = (Application.builder().token(TOKEN).post_init(post_init)
+           .connect_timeout(20).read_timeout(40).write_timeout(40).media_write_timeout(60).pool_timeout(20).build())
     app.add_error_handler(on_error)
     app.add_handler(CommandHandler("start", start))
     for name, fn in [("help", help_cmd), ("rules", rules_cmd), ("today", today_cmd), ("yesterday", yesterday_cmd),
