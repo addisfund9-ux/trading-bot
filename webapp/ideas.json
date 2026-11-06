@@ -1,21 +1,26 @@
 {
-  "date": "2026-11-05",
-  "generated_at": "2026-11-05T07:12:49+03:00",
-  "headline": "Today's run couldn't open any web pages, so there's no new outside research; the two ideas below build on what the bot already does: a trade countdown and a market breadth check.",
+  "date": "2026-11-06",
+  "generated_at": "2026-11-06T07:20:00+03:00",
+  "headline": "No API changes break the bot today and research was thin, so there are just two ideas: check whether you cut winners faster than losers, and judge funding against each coin's own normal instead of one fixed number.",
   "ideas": [
     {
-      "title": "Trade budget countdown in the tilt guard",
-      "why": "Today the guard only speaks up after trade 9, when the damage is already done. Set a budget in the 08:00 brief (say 5) and get \"3 of 5 left\" after every new position, with each loss using up one extra. On 25 Oct the budget would have run out early in the revenge run.",
+      "title": "Winners vs losers: hold time and size",
+      "why": "Traders tend to grab small wins fast and sit in losers. /report and /week would show median minutes and average USDT for winning vs losing trades, e.g. \"wins 3 min, +0.40 · losses 11 min, -0.95\", so you see if your wins are too small to pay for your losses.",
       "effort": "small",
       "area": "discipline"
     },
     {
-      "title": "Market breadth line at the top of the scanner",
-      "why": "Count how many of the scanned movers have 1h EMA 20 above EMA 50 and show \"Breadth 70% up\" in the scanner and the brief. Flag a short when most of the market is aligned up, or a long when most is aligned down. It reuses klines the scanner already fetches.",
+      "title": "Crowded flag from each coin's own funding history",
+      "why": "Crowded now fires at a fixed 0.05% funding. Some coins sit near that every day; others rarely pass 0.01%. Compare current funding to the coin's last 30 days and flag only when it's far outside its normal. Evidence that funding predicts moves is weak, so treat it as a 'size down' warning.",
       "effort": "small",
       "area": "scanner"
     }
   ],
   "watch": [],
-  "sources": []
+  "sources": [
+    {"title": "Binance USDⓈ-M Futures API change log", "url": "https://developers.binance.com/docs/derivatives/change-log"},
+    {"title": "Schatzmann & Haslhofer: Exploring investor behavior in Bitcoin: a study of the disposition effect (arXiv)", "url": "https://arxiv.org/abs/2010.12415"},
+    {"title": "Brave New Coin: Testing theory: is perpetual swap funding rate predictive?", "url": "https://bravenewcoin.com/insights/testing-theory-is-perpetual-swap-funding-rate-predictive"},
+    {"title": "Yellow.com: How funding rates predict crypto's most violent reversals", "url": "https://yellow.com/learn/how-to-read-funding-rates-crypto-reversals"}
+  ]
 }
