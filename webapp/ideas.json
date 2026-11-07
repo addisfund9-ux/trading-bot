@@ -1,26 +1,34 @@
 {
-  "date": "2026-11-06",
-  "generated_at": "2026-11-06T07:20:00+03:00",
-  "headline": "No API changes break the bot today and research was thin, so there are just two ideas: check whether you cut winners faster than losers, and judge funding against each coin's own normal instead of one fixed number.",
+  "date": "2026-11-07",
+  "generated_at": "2026-11-07T07:20:00+03:00",
+  "headline": "No API changes break the bot today; the ideas set your daily trade cap from your own results, add a short gap after every trade (wins too), and flag coins whose futures price runs far above spot.",
   "ideas": [
     {
-      "title": "Winners vs losers: hold time and size",
-      "why": "Traders tend to grab small wins fast and sit in losers. /report and /week would show median minutes and average USDT for winning vs losing trades, e.g. \"wins 3 min, +0.40 · losses 11 min, -0.95\", so you see if your wins are too small to pay for your losses.",
+      "title": "Daily trade cap from your own history",
+      "why": "/week groups your past days by how many trades you took (1–2, 3–4, 5–6, 7+) and shows win rate and P&L for each. The cap in tilt.py becomes the count where your days turn red, instead of a fixed 8. Your own numbers, not a rule from a book.",
       "effort": "small",
       "area": "discipline"
     },
     {
-      "title": "Crowded flag from each coin's own funding history",
-      "why": "Crowded now fires at a fixed 0.05% funding. Some coins sit near that every day; others rarely pass 0.01%. Compare current funding to the coin's last 30 days and flag only when it's far outside its normal. Evidence that funding predicts moves is weak, so treat it as a 'size down' warning.",
+      "title": "5-minute gap after every trade, not just losses",
+      "why": "tilt.py only flags entries within 15 min of a loss. Overtrading also starts after wins: the click itself feels good. Flag any entry within 5 min of the last exit, count them in /tilt, and show the gap rule in the morning brief.",
+      "effort": "small",
+      "area": "discipline"
+    },
+    {
+      "title": "\"Premium\" flag: futures price far above or below spot",
+      "why": "The scanner already pulls /fapi/v1/premiumIndex but only uses funding. Its markPrice vs indexPrice gives the live perp-vs-spot gap. A big gap on a mover means the move is mostly leveraged futures traders, which tends to unwind. Show it next to Crowded.",
       "effort": "small",
       "area": "scanner"
     }
   ],
   "watch": [],
   "sources": [
-    {"title": "Binance USDⓈ-M Futures API change log", "url": "https://developers.binance.com/docs/derivatives/change-log"},
-    {"title": "Schatzmann & Haslhofer: Exploring investor behavior in Bitcoin: a study of the disposition effect (arXiv)", "url": "https://arxiv.org/abs/2010.12415"},
-    {"title": "Brave New Coin: Testing theory: is perpetual swap funding rate predictive?", "url": "https://bravenewcoin.com/insights/testing-theory-is-perpetual-swap-funding-rate-predictive"},
-    {"title": "Yellow.com: How funding rates predict crypto's most violent reversals", "url": "https://yellow.com/learn/how-to-read-funding-rates-crypto-reversals"}
+    {"title": "Binance USDⓈ-M Futures change log", "url": "https://developers.binance.com/en/docs/products/derivatives-trading-usds-futures/change-log"},
+    {"title": "JournalPlus — Overtrading prevention guide", "url": "https://journalplus.co/learn/guides/overtrading-prevention-guide"},
+    {"title": "The Mental Edge — Why you can't stop clicking", "url": "https://mentaledgetrading.beehiiv.com/p/why-you-can-t-stop-clicking"},
+    {"title": "Mind the Market — Sensation-seeking trading and overtrading", "url": "https://mind-the-market-blog.pages.dev/articles/sensation-seeking-overtrading"},
+    {"title": "TradingView — Binance Premium Index (ByzantiumScripts)", "url": "https://www.tradingview.com/script/kFuPDrlJ-Binance-Premium-Index"},
+    {"title": "Wickra docs — PerpetualPremiumIndex", "url": "https://4e3995d1.wickra-docs.pages.dev/Indicators/Indicator-PerpetualPremiumIndex"}
   ]
 }
