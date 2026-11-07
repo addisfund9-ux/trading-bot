@@ -20,6 +20,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 import backtest
 import brief
+import picks
 import coach
 import guard
 import hours
@@ -75,6 +76,9 @@ MAX_POSITION = float(os.getenv("MAX_POSITION_USD", "20"))
 MAX_LEVERAGE = int(os.getenv("MAX_LEVERAGE", "10"))
 RISK_PER_TRADE = float(os.getenv("RISK_PER_TRADE_USD", "1"))
 REST_DAY = os.getenv("REST_AFTER_STOP", "1").strip() not in ("0", "false", "no", "")
+# bot picks: the bot books its own paper trades (no money) to find out, going forward, whether its picks work
+PICKS_ON = os.getenv("BOT_PICKS", "1").strip() not in ("0", "false", "no", "")
+PICK_ALERTS = os.getenv("PICK_ALERTS", "0").strip() not in ("0", "false", "no", "")
 SLOW_START = date.fromisoformat(os.getenv("SLOW_START", "2026-11-07"))
 IDEAS_URL = os.getenv("IDEAS_URL", (WEBAPP_URL.rstrip("/") + "/ideas.json") if WEBAPP_URL else "").strip()
 INBOX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox")
@@ -83,6 +87,7 @@ SCAN_MIN_VOL = float(os.getenv("SCAN_MIN_VOL_M", "20"))
 ALBUM_WAIT = 6  # seconds to wait for the rest of a batch of screenshots
 
 con = store.connect()
+picks.ensure(con)
 # The Claude key is optional: with it, screenshots are read and summaries are written by Claude;
 # without it, trades come from Binance export files and summaries are rule-based.
 CLAUDE_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
@@ -148,6 +153,9 @@ def schedule(app: Application, chat_id: int):
         jq.run_daily(window_closed_job, parse_hhmm(LAST_ENTRY), chat_id=chat_id, name="window")
     if EVENING:
         jq.run_daily(evening_job, parse_hhmm(EVENING), chat_id=chat_id, name="evening")
+    if PICKS_ON:
+        jq.run_repeating(picks_job, interval=15 * 60, first=90, chat_id=chat_id, name="picks")
+        jq.run_repeating(picks_resolve_job, interval=5 * 60, first=150, chat_id=chat_id, name="picks_resolve")
     log.info("Scheduled morning brief at %s and reminder at %s (%s)", MORNING, EVENING or "off", TZ)
 
 
@@ -201,6 +209,7 @@ HELP = (
     "/chart — today's trades drawn on the price chart\n"
     "/ideas — today's research: new ideas for the bot and your trading\n"
     "/hours — when the market is busy vs when you make money, as a chart\n"
+    "/picks — the bot's own paper-trade journal (scanner + pump watch + Time Machine), with the results chart\n"
     "/lessons — your mistakes ranked by what they cost, a rule for today, your clean-day streak\n"
     "/rings — today's trading rings (calm · wins · rules), or /rings 2026-10-24\n"
     "/tilt — revenge-trading and overtrading check (today, /tilt 2026-10-24, or /tilt week)\n"
@@ -776,7 +785,9 @@ def plan_data():
     rule = lessons.rule_for_today(lessons_data(y))
     s = {"max_pos": MAX_POSITION, "max_lev": MAX_LEVERAGE, "risk": RISK_PER_TRADE, "max_trades": MAX_TRADES,
          "last_entry": LAST_ENTRY, "loss_limit": LOSS_LIMIT, "rest_day": REST_DAY}
-    return brief.text(datetime.now(TZ), FOCUS, y, yrows, s, tr, rule)
+    msg, rest = brief.text(datetime.now(TZ), FOCUS, y, yrows, s, tr, rule)
+    line = picks.summary_line(con)
+    return (msg + "\n" + line if line else msg), rest
 
 
 async def morning_brief(ctx, chat_id, mark_sent=None):
@@ -798,6 +809,82 @@ async def morning_brief(ctx, chat_id, mark_sent=None):
                    "proven edge: only take one if it fits every line of today's plan.</i>")
     except Exception as e:
         log.exception("scan failed")
+
+
+_BUSY = {"day": None, "vol": None}
+
+
+def _busy_vol():
+    """Market volume by Addis hour (1.0 = a normal hour), refreshed once a day. Runs in a worker thread."""
+    d = today()
+    if _BUSY["day"] != d:
+        try:
+            _BUSY["vol"] = {h: v["vol"] for h, v in hours.market_profile(14, 40).items()}
+        except Exception:
+            log.exception("market profile failed")
+        _BUSY["day"] = d
+    return _BUSY["vol"]
+
+
+def _picks_round():
+    c = store.connect()                          # own connection: this runs in a worker thread
+    try:
+        return picks.run_round(c, _busy_vol(), log=log.warning)
+    finally:
+        c.close()
+
+
+def _picks_resolve():
+    c = store.connect()
+    try:
+        return picks.resolve(c)
+    finally:
+        c.close()
+
+
+async def picks_job(ctx: ContextTypes.DEFAULT_TYPE):
+    if BT_RUNNING["on"]:
+        return
+    try:
+        new = await asyncio.to_thread(_picks_round)
+    except Exception:
+        log.exception("picks round failed")
+        return
+    if new:
+        log.info("Bot picks booked: %s", ", ".join(f"{p['symbol']} {p['verdict']}" for p in new))
+        if PICK_ALERTS:
+            for p in new:
+                await send(ctx, ctx.job.chat_id, picks.fresh_text(p))
+
+
+async def picks_resolve_job(ctx: ContextTypes.DEFAULT_TYPE):
+    try:
+        done = await asyncio.to_thread(_picks_resolve)
+        if done:
+            log.info("Bot picks closed: %s", ", ".join(f"{p['symbol']} {p['status']} {p['r']:+.2f}R" for p in done))
+    except Exception:
+        log.exception("picks resolve failed")
+
+
+@owner_only
+async def picks_cmd(update: Update, ctx):
+    chat = update.effective_chat.id
+    await send(ctx, chat, picks.text(con))
+    try:
+        png = await asyncio.to_thread(_picks_chart)
+        if png:
+            await ctx.bot.send_photo(chat, png, caption="Bot picks: running total in R, and the latest picks' paths "
+                                                       "(dotted = entry, green = target, red = stop)")
+    except Exception:
+        log.exception("picks chart failed")
+
+
+def _picks_chart():
+    c = store.connect()
+    try:
+        return picks.chart(c)
+    finally:
+        c.close()
 
 
 async def morning_job(ctx: ContextTypes.DEFAULT_TYPE):
@@ -942,7 +1029,7 @@ def main():
     app.add_error_handler(on_error)
     app.add_handler(CommandHandler("start", start))
     for name, fn in [("help", help_cmd), ("rules", rules_cmd), ("today", today_cmd), ("yesterday", yesterday_cmd),
-                     ("day", day_cmd), ("week", week_cmd), ("scan", scan_cmd), ("backtest", backtest_cmd), ("pumptest", pumptest_cmd), ("guard", guard_cmd), ("hours", hours_cmd), ("lessons", lessons_cmd), ("rings", rings_cmd), ("morning", morning_cmd),
+                     ("day", day_cmd), ("week", week_cmd), ("scan", scan_cmd), ("backtest", backtest_cmd), ("pumptest", pumptest_cmd), ("guard", guard_cmd), ("hours", hours_cmd), ("picks", picks_cmd), ("lessons", lessons_cmd), ("rings", rings_cmd), ("morning", morning_cmd),
                      ("report", report_cmd), ("chart", chart_cmd), ("tilt", tilt_cmd), ("ideas", ideas_cmd),
                      ("undo", undo_cmd), ("export", export_cmd)]:
         app.add_handler(CommandHandler(name, fn))
