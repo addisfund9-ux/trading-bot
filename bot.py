@@ -829,7 +829,7 @@ def _busy_vol():
 def _picks_round():
     c = store.connect()                          # own connection: this runs in a worker thread
     try:
-        return picks.run_round(c, _busy_vol(), log=log.warning)
+        return picks.run_round(c, _busy_vol(), log=log.warning, info=log.info)
     finally:
         c.close()
 

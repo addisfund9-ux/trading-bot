@@ -264,7 +264,7 @@ def candidates(scan_result):
     return [c for c in scan_result["coins"] if c["full"] and c["score"] >= 60 and not CLEAN_BLOCK & set(c["flags"])]
 
 
-def run_round(con, busy_vol=None, now_ms=None, scan_result=None, log=print):
+def run_round(con, busy_vol=None, now_ms=None, scan_result=None, log=print, info=None):
     """Scan, cross-check with the pump watch, check the odds, book paper picks. Returns the new picks."""
     ensure(con)
     now_ms = now_ms or int(time.time() * 1000)
@@ -272,7 +272,7 @@ def run_round(con, busy_vol=None, now_ms=None, scan_result=None, log=print):
     clean = candidates(res)
     open_or_recent = {r["symbol"] for r in con.execute(
         "SELECT symbol FROM picks WHERE status='open' OR opened_ms > ?", (now_ms - HOLD_MIN * 60_000,))}
-    out = []
+    out, matched = [], 0
     for c in clean:
         sym = c["sym"]
         if sym in open_or_recent:
@@ -284,6 +284,7 @@ def run_round(con, busy_vol=None, now_ms=None, scan_result=None, log=print):
             continue
         if p["dir"] != c["dir"] or p["state"] not in ("trigger", "aligned"):
             continue
+        matched += 1
         try:
             tm = tm_analyse(tm_fetch(sym), c["dir"], busy_vol)
         except Exception as e:
@@ -299,6 +300,8 @@ def run_round(con, busy_vol=None, now_ms=None, scan_result=None, log=print):
                           "p_stop,exp_r,hist_n,hist_r,busy,why) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", row)
         con.commit()
         out.append(dict(con.execute("SELECT * FROM picks WHERE id=?", (cur.lastrowid,)).fetchone()))
+    (info or log)(f"Bot picks round: {len(res['coins'])} scanned, {len(clean)} clean, {matched} also in the pump watch, "
+                  f"{len(out)} booked")
     return out
 
 
