@@ -1,33 +1,42 @@
 {
-  "date": "2026-11-08",
-  "generated_at": "2026-11-08T07:25:00+03:00",
-  "headline": "No API changes break the bot today; the ideas add a clock to every scalp, tag why you closed each trade, and tell you to wait one candle after a hard taker-driven spike.",
+  "date": "2026-11-09",
+  "generated_at": "2026-11-09T07:25:00+03:00",
+  "headline": "No API changes break the bot today and research was thin, so there are just two ideas, both from streak studies: let a broken clean-day streak be repaired, and show clean days per week so one bad day doesn't wipe the slate.",
   "ideas": [
     {
-      "title": "Time stop: a clock on every scalp",
-      "why": "Pick a hold limit before entry, e.g. 4 candles on 15m (1 hour). If neither stop nor target has hit, close it. /report lists trades held past the limit and what they made, so you see whether slow trades are where your losses grow.",
-      "effort": "small",
-      "area": "risk"
-    },
-    {
-      "title": "Tag why you closed each trade",
-      "why": "After each imported trade, one tap: Plan, Fear (early exit), FOMO entry, or Moved stop. /week shows P&L per tag. After ~30 trades you see in numbers what breaking your own rules costs, beyond revenge timing.",
+      "title": "Repair a broken clean-day streak",
+      "why": "Studies find a broken streak makes people quit, but a repair option softens that. After a tilted day, the next day can restore your /lessons streak if it is clean and you stop at half your trade cap. One bad day stops being a reason to give up on the rules.",
       "effort": "small",
       "area": "discipline"
     },
     {
-      "title": "\"Wait a candle\" flag after a taker-driven spike",
-      "why": "A 2026 study of 183 Binance pairs found 15-minute moves tend to partly reverse, most after aggressive taker buying or selling. Flag movers whose last 15m candle was big and mostly one-sided takers: wait for the next close before entering.",
+      "title": "Clean days this week next to the streak",
+      "why": "Alongside the streak, /lessons and the 08:00 brief show 'clean days: 4 of last 7' and your best streak. A run of clean days can make you feel safe, so the line also says your caps stay the same however long the streak is.",
       "effort": "small",
-      "area": "scanner"
+      "area": "discipline"
     }
   ],
   "watch": [],
   "sources": [
-    {"title": "Binance USDⓈ-M Futures change log", "url": "https://developers.binance.com/docs/derivatives/change-log"},
-    {"title": "The Right Trader — Time Stop: Bar-Count Rules, Example, and Tradeoffs", "url": "https://therighttrader.com/learn/risk-management/time-stop"},
-    {"title": "DEV Community — I Tested 4 Stop Loss Methods on My Crypto Bot", "url": "https://dev.to/trendrider/i-tested-4-stop-loss-methods-on-my-crypto-bot-heres-what-actually-works-47i0"},
-    {"title": "JournalPlus — Trading discipline guide", "url": "https://journalplus.co/learn/guides/trading-discipline-guide"},
-    {"title": "Kitron & Wengrowicz — Short-horizon mean reversion in cryptocurrency markets: a matched cross-market measurement", "url": "https://ideas.repec.org/p/arx/papers/2608.21888.html"}
+    {
+      "title": "How streaks motivate us | UDaily (University of Delaware)",
+      "url": "https://udel.edu/udaily/2024/march/power-of-streaks-motivation-jackie-silverman"
+    },
+    {
+      "title": "On or off Track: How (Broken) Streaks Affect Consumer Decisions | INSEAD",
+      "url": "https://www.insead.edu/faculty-research/publications/journal-articles/or-track-how-broken-streaks-affect-consumer"
+    },
+    {
+      "title": "Binance USDⓈ-M Futures change log",
+      "url": "https://developers.binance.com/en/docs/products/derivatives-trading-usds-futures/change-log"
+    },
+    {
+      "title": "Telegram Bot API changelog",
+      "url": "https://core.telegram.org/bots/api-changelog"
+    },
+    {
+      "title": "Netlify changelog",
+      "url": "https://www.netlify.com/changelog/"
+    }
   ]
 }
