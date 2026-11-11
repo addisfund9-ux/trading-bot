@@ -1,38 +1,34 @@
 {
-  "date": "2026-11-10",
-  "generated_at": "2026-11-10T07:20:00+03:00",
-  "headline": "No API changes break the bot today and research was thin, so there are two ideas: log the trades you skip so not trading counts as a win, and warn when your morning picks are really one bet on BTC.",
+  "date": "2026-11-11",
+  "generated_at": "2026-11-11T07:25:00+03:00",
+  "headline": "No change found that breaks the bot (Telegram's Bot API 10.4 adds features the bot doesn't use, and today's run couldn't open the Binance changelog); the ideas add a warning stage before the daily limit, catch size-ups after wins, and make repeated limit days shrink next week.",
   "ideas": [
     {
-      "title": "/skip: log the trades you didn't take",
-      "why": "One tap logs a trade you nearly took but skipped, with the reason (no stop, chasing, after a loss). The 21:00 reminder and /week count skips next to trades, and the evening scorecard shows how the skipped coin moved. Not trading becomes something you can see and score.",
+      "title": "Soft stop before the daily loss limit",
+      "why": "Today the guard speaks once, when you've given back 5 USDT. Add a first warning at 3 USDT: 'half size, no adding, no new coins', with room left counting your open loss too. You get a nudge while it can still change the next trade.",
+      "effort": "small",
+      "area": "risk"
+    },
+    {
+      "title": "Catch size-ups after wins, not just losses",
+      "why": "tilt.py flags bigger leverage or size only after a loss. 25 Oct started while you were green. Also flag size or leverage going up after 3 wins in a row, and have /tilt show whether your rule breaks cluster during win streaks.",
       "effort": "small",
       "area": "discipline"
     },
     {
-      "title": "\"Same bet\" warning on the morning list",
-      "why": "Many alts move with BTC, so three longs on three alts can act like one big long. The scanner measures each pick's 1h correlation with BTC and, when most picks point the same way and move with BTC, says so at the top: treat them as one trade and size the total, not each.",
+      "title": "Limit days add up: hit it twice, next week trades smaller",
+      "why": "/week counts days you hit the loss limit. Twice in a week and the Monday brief sets size 25–50% lower; three times and the week starts with the bot's paper picks only. One bad day costs a day, a bad week costs some size.",
       "effort": "medium",
-      "area": "scanner"
+      "area": "risk"
     }
   ],
   "watch": [],
   "sources": [
-    {
-      "title": "A Checklist Won't Make You a Great Trader. It'll Just Stop You From Being Your Own Worst Enemy | HackerNoon",
-      "url": "https://hackernoon.com/a-checklist-wont-make-you-a-great-trader-itll-just-stop-you-from-being-your-own-worst-enemy"
-    },
-    {
-      "title": "Correlation Risk | Turtle Signal docs",
-      "url": "https://doc-turtlesignal-com-jekyll.pages.dev/en/risk/correlation-risk/"
-    },
-    {
-      "title": "Binance USDⓈ-M Futures change log",
-      "url": "https://developers.binance.com/docs/derivatives/change-log"
-    },
-    {
-      "title": "python-telegram-bot changelog",
-      "url": "https://docs.python-telegram-bot.org/en/latest/changelog.html"
-    }
+    {"title": "Daily Loss Limits and Account Preservation Protocols for Futures Trading | NexusFi", "url": "https://nexusfi.com/a/risk-management/daily-loss-limits"},
+    {"title": "Daily Loss Limit: Rules, Math, and a Worked Example | The Right Trader", "url": "https://therighttrader.com/learn/risk-management/daily-loss-limit"},
+    {"title": "The Drawdown Circuit Breaker: Building a Quantitative Trading Halt Plan | TradeZero", "url": "https://tradezero.com/blog/the-drawdown-circuit-breaker-building-a-quantitative-trading-halt-plan"},
+    {"title": "Winning Streaks and Overconfidence: Why Your Best Week Precedes Your Worst Trade | NexusFi", "url": "https://nexusfi.com/a/psychology/winning-streaks-overconfidence"},
+    {"title": "Time-varying risk behavior and prior investment outcomes: Evidence from Italy (Judgment and Decision Making, 2018)", "url": "https://dlab.sauder.ubc.ca/sjdm/journal/18/18207a/jdm18207a.html"},
+    {"title": "Telegram Bot API changelog", "url": "https://core.telegram.org/bots/api-changelog"}
   ]
 }
