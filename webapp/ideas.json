@@ -1,27 +1,28 @@
 {
-  "date": "2026-11-12",
-  "generated_at": "2026-11-12T07:20:00+03:00",
-  "headline": "No API changes break the bot today and research was thin, so there are two ideas: drop movers whose volume came from one burst, and show in /week how the trades you took against the scanner's own warnings did.",
+  "date": "2026-11-13",
+  "generated_at": "2026-11-13T07:20:00+03:00",
+  "headline": "No API change affects the bot today and the research was thin, so there are two ideas: rule changes you make mid-day wait until tomorrow, and a one-tap 'did I follow my plan?' grade at 21:00 that /week sets next to your P&L.",
   "ideas": [
     {
-      "title": "Steady-volume check on each mover",
-      "why": "A coin can pass the 24h volume floor from one burst and be thin the rest of the day. Count how many of the last 96 15m candles cleared a set dollar volume and flag 'Patchy' below about 80%. Fewer jumpy coins to chase, using candles the scanner already pulls.",
+      "title": "Rule changes wait until tomorrow",
+      "why": "Your limits (leverage, trade cap, loss limit) live in .env, so a restart after a loss can loosen them on the spot. Have the bot save each day's limits at 08:00; any looser value seen later that day is ignored until the next brief, which says what you changed.",
       "effort": "small",
-      "area": "scanner"
+      "area": "discipline"
     },
     {
-      "title": "Warnings you traded through, in /week",
-      "why": "Save the scanner's flags (Crowded, Stretched, OI falling, vs BTC, Late) for each coin when you open a trade. /week then shows trades taken on flagged coins vs clean ones, with P&L. If flagged trades lose, you see it in your own numbers, not as a rule.",
-      "effort": "medium",
+      "title": "Nightly plan grade, 1 to 5",
+      "why": "Add five buttons to the 21:00 reminder: 'How well did you follow your plan today?' Store the tap; /week shows each day's grade next to its P&L and trade count. You learn whether your red days are bad-luck days or broken-plan days, in your own words.",
+      "effort": "small",
       "area": "discipline"
     }
   ],
   "watch": [],
   "sources": [
-    {"title": "Multi-Timeframe Crypto Scanner Filters: How to Layer Rules (AnomIQ)", "url": "https://landing-page-astro-b0h.pages.dev/blog/custom-crypto-scanner-filters-timeframes/"},
-    {"title": "Building a Scanner Tech Stack: Layering Intraday Filters for Smarter Screening (TradeZero)", "url": "https://tradezero.com/blog/building-a-scanner-tech-stack-layering-intraday-filters-for-smarter-screening"},
-    {"title": "Crypto Futures Open Interest: How to Read the Positioning Signal (Sharpe)", "url": "https://www.sharpe.ai/learn/futures-open-interest"},
-    {"title": "Binance Derivatives Change Log", "url": "https://developers.binance.com/docs/derivatives/change-log"},
+    {"title": "Trading psychology for rule-based traders: emotional control starts in the process, not the pep talk (TradeLux)", "url": "https://tradelux.ai/blog/trading-psychology-for-rule-based-traders-emotional-control-starts-in-the-process-not-the-pep-talk"},
+    {"title": "The Gap Between Impulse and Action: How to Stop Sabotaging Your Trading (The Observer Mindset)", "url": "https://theobservermindset.substack.com/p/the-gap-between-impulse-and-action"},
+    {"title": "Why You Can't Stop Clicking (Mental Edge Trading)", "url": "https://mentaledgetrading.beehiiv.com/p/why-you-can-t-stop-clicking"},
+    {"title": "Binance USDⓈ-M Futures Change Log", "url": "https://developers.binance.info/en/docs/products/derivatives-trading-usds-futures/change-log"},
+    {"title": "Telegram Bot API changelog", "url": "https://core.telegram.org/bots/api-changelog"},
     {"title": "python-telegram-bot changelog", "url": "https://docs.python-telegram-bot.org/en/latest/changelog.html"}
   ]
 }
