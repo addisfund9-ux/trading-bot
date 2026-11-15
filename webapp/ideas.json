@@ -1,21 +1,38 @@
 {
-  "date": "2026-11-14",
-  "generated_at": "2026-11-14T07:25:00+03:00",
-  "headline": "Today's run couldn't open any web pages, so the API changelogs went unchecked and there's no new outside research; the two ideas come from reading the bot's own code: make the tilt guard tell you when it stops working, and make the scanner show when Binance data is missing.",
+  "date": "2026-11-15",
+  "generated_at": "2026-11-15T07:20:00+03:00",
+  "headline": "No API change affects the bot today; the ideas make you write a one-line plan before each trade, make a losing coin wait for a fresh setup instead of a timer, and have you pick one trading hour in the morning brief.",
   "ideas": [
     {
-      "title": "Tell me when the tilt guard goes quiet",
-      "why": "If the guard's Binance calls start failing (PC clock drift, key or API change), it only writes a log line, so you trade thinking it's watching. Alert in Telegram after ~2 minutes of errors and again when it's back, and sync the clock with Binance's server time.",
-      "effort": "small",
-      "area": "bot"
+      "title": "/plan before every entry",
+      "why": "Before you open a trade, send '/plan SOL long stop 142.1'. The guard checks each new position against it: no plan in the last 10 minutes, or a stop that doesn't match, and you get an 'unplanned' alert. /week shows planned vs unplanned P&L.",
+      "effort": "medium",
+      "area": "discipline"
     },
     {
-      "title": "Data health line on every scan",
-      "why": "When an OI, taker or long/short call fails, the scanner quietly drops that part of the score, or the whole coin. Show 'OI missing for 12 of 30 coins' on /scan, the Mini App and the 08:00 brief, so a Binance change or rate limit shows up on day one.",
-      "effort": "small",
+      "title": "After a loss, the coin waits for a new setup",
+      "why": "Revenge trades are usually the same coin, same idea, minutes later. After a loss, mark that coin 'used' on the scanner and in the guard until its 15m EMA 9/21 crosses back and re-aligns: a real new setup, not just 15 minutes passing.",
+      "effort": "medium",
       "area": "scanner"
+    },
+    {
+      "title": "Pick your one trading hour at 08:00",
+      "why": "The brief asks you to tap one window for today (09–10, 10–11 or 11–12) inside your 12:00 cutoff. The guard warns on any entry outside it. Naming a narrow window ahead of time is a planning prompt that has raised follow-through in a field study.",
+      "effort": "small",
+      "area": "discipline"
     }
   ],
   "watch": [],
-  "sources": []
+  "sources": [
+    {"title": "Binance Derivatives — Change Log", "url": "https://developers.binance.com/docs/derivatives/change-log"},
+    {"title": "Telegram Bot API changelog", "url": "https://core.telegram.org/bots/api-changelog"},
+    {"title": "python-telegram-bot releases", "url": "https://github.com/python-telegram-bot/python-telegram-bot/releases"},
+    {"title": "python-telegram-bot changelog", "url": "https://docs.python-telegram-bot.org/en/stable/changelog.html"},
+    {"title": "The Gap Between Impulse and Action: How to Stop Sabotaging Your Trading", "url": "https://theobservermindset.substack.com/p/the-gap-between-impulse-and-action"},
+    {"title": "A Checklist Won't Make You a Great Trader. It'll Just Stop You From Being Your Own Worst Enemy (HackerNoon)", "url": "https://hackernoon.com/a-checklist-wont-make-you-a-great-trader-itll-just-stop-you-from-being-your-own-worst-enemy"},
+    {"title": "Execution Protocol: A 7-Point Pre-Trade Checklist (Trader's Second Brain)", "url": "https://traderssecondbrain.com/guides/execution-protocol-checklist"},
+    {"title": "Why You Can't Stop Clicking (The Mental Edge)", "url": "https://mentaledgetrading.beehiiv.com/p/why-you-can-t-stop-clicking"},
+    {"title": "Mazar, Mochon & Ariely (2018): Automatic Planning Prompt Reduces Credit Card Delinquency", "url": "https://open.bu.edu/items/06588af1-5375-47c4-8017-514223f511b7"},
+    {"title": "Thürmer et al. (2020): If-then plans help regulate automatic peer influence on impulse buying", "url": "https://www.emerald.com/insight/content/doi/10.1108/EJM-05-2018-0341/full/html"}
+  ]
 }
