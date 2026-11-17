@@ -1,26 +1,27 @@
 {
-  "date": "2026-11-16",
-  "generated_at": "2026-11-16T07:25:00+03:00",
-  "headline": "Research was thin today (most pages wouldn't open) and no API change breaks the bot, so there are two ideas from the bot's own code: make the tilt guard read every income row on busy days, and flag movers that have already used up their normal daily range.",
+  "date": "2026-11-17",
+  "generated_at": "2026-11-17T07:20:00+03:00",
+  "headline": "No API change breaks the bot today and research was thin, so there are two risk ideas: show the win rate you need to break even next to the one you have, and show the highest leverage each coin's normal noise allows.",
   "ideas": [
     {
-      "title": "Tilt guard reads every row on busy days",
-      "why": "The guard asks Binance for the last 26 hours of income in one call capped at 1000 rows. On a heavy overtrading day, partial fills and fees can pass that cap and the newest rows — the revenge trades it exists to catch — may be missed. Page by time until a call returns fewer than 1000.",
+      "title": "Break-even win rate next to your real one",
+      "why": "A high win rate can still lose if losses are bigger than wins. /report and /week would show 'you need 52% wins to break even after fees, you're at 44%', worked out from your own average win, loss and fees, so you see when small wins are hiding a leak.",
       "effort": "small",
-      "area": "bot"
+      "area": "risk"
     },
     {
-      "title": "\"Range used\" flag on scanner cards",
-      "why": "Top movers are often already done for the day. From the 4h candles the scanner already loads, compare today's high–low with the coin's average daily range over 14 days. Over 100% shows a \"Range used\" flag, so a late chase looks as risky as it is.",
+      "title": "Max leverage that fits the coin's noise",
+      "why": "Each scanner card would show the highest leverage where a normal 1.5× ATR swing on 15m costs under, say, 30% of margin. On a jumpy coin that might be 12×, so reaching for 40× after a loss shows up as clearly too big before you enter.",
       "effort": "small",
-      "area": "scanner"
+      "area": "risk"
     }
   ],
-  "watch": [
-    "Binance dropped the 'page' parameter from GET /fapi/v1/income (16 Oct 2026); paging now has to use startTime/endTime. guard.py already uses startTime only, so nothing breaks today."
-  ],
+  "watch": [],
   "sources": [
     {"title": "Binance Derivatives — Change Log", "url": "https://developers.binance.com/docs/derivatives/change-log"},
-    {"title": "Telegram Bot API changelog", "url": "https://core.telegram.org/bots/api-changelog"}
+    {"title": "Telegram Bot API changelog", "url": "https://core.telegram.org/bots/api-changelog"},
+    {"title": "Why most traders fail despite being right more than half of the time (InvesClubX)", "url": "https://invesclubx.substack.com/p/why-most-traders-fail-despite-being"},
+    {"title": "Why your stop-loss is a measurement problem (Algorithmic Token)", "url": "https://algorithmictoken.substack.com/p/why-your-stop-loss-is-a-measurement"},
+    {"title": "5 position sizing methods for high-volatility trades (LuxAlgo)", "url": "https://www.luxalgo.com/blog/5-position-sizing-methods-for-high-volatility-trades/"}
   ]
 }
