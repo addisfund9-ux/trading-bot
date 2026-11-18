@@ -1,27 +1,64 @@
 {
-  "date": "2026-11-17",
-  "generated_at": "2026-11-17T07:20:00+03:00",
-  "headline": "No API change breaks the bot today and research was thin, so there are two risk ideas: show the win rate you need to break even next to the one you have, and show the highest leverage each coin's normal noise allows.",
+  "date": "2026-11-18",
+  "generated_at": "2026-11-18T07:13:44+03:00",
+  "headline": "No API change breaks the bot today; the ideas check whether a mover's order book can take your full position, show who is behind a 15-minute move, and make the scanner wait 20 seconds while a cooldown is on.",
   "ideas": [
     {
-      "title": "Break-even win rate next to your real one",
-      "why": "A high win rate can still lose if losses are bigger than wins. /report and /week would show 'you need 52% wins to break even after fees, you're at 44%', worked out from your own average win, loss and fees, so you see when small wins are hiding a leak.",
-      "effort": "small",
-      "area": "risk"
+      "title": "\"Too thin for your size\" check on the top picks",
+      "why": "At 20–40× your position is large for a small coin. For the 5 morning picks, read the order book and work out how far price would slip if you filled your usual size. If that slippage eats a big share of a normal scalp, the card says so before you enter.",
+      "effort": "medium",
+      "area": "scanner"
     },
     {
-      "title": "Max leverage that fits the coin's noise",
-      "why": "Each scanner card would show the highest leverage where a normal 1.5× ATR swing on 15m costs under, say, 30% of margin. On a jumpy coin that might be 12×, so reaching for 40× after a loss shows up as clearly too big before you enter.",
+      "title": "Who is moving it: 15-minute OI + taker label",
+      "why": "The scanner reads OI and taker flow on 1h, but you trade the 15m. Label each card \"new longs\", \"shorts closing\", \"new shorts\" or \"longs closing\" from the last 15m, so you can tell a move with fresh money behind it from a squeeze that may already be done.",
       "effort": "small",
-      "area": "risk"
+      "area": "scanner"
+    },
+    {
+      "title": "20-second pause on the scanner during a cooldown",
+      "why": "After a loss, opening the scanner to find the next trade is the first step of a revenge run. While the tilt guard's cooldown is on, the scanner first shows today's P&L and your next allowed entry time for 20 seconds, then shows the coins.",
+      "effort": "small",
+      "area": "discipline"
     }
   ],
   "watch": [],
   "sources": [
-    {"title": "Binance Derivatives — Change Log", "url": "https://developers.binance.com/docs/derivatives/change-log"},
-    {"title": "Telegram Bot API changelog", "url": "https://core.telegram.org/bots/api-changelog"},
-    {"title": "Why most traders fail despite being right more than half of the time (InvesClubX)", "url": "https://invesclubx.substack.com/p/why-most-traders-fail-despite-being"},
-    {"title": "Why your stop-loss is a measurement problem (Algorithmic Token)", "url": "https://algorithmictoken.substack.com/p/why-your-stop-loss-is-a-measurement"},
-    {"title": "5 position sizing methods for high-volatility trades (LuxAlgo)", "url": "https://www.luxalgo.com/blog/5-position-sizing-methods-for-high-volatility-trades/"}
+    {
+      "title": "How to Spot a Low-Liquidity Crypto Perp Before It Wrecks You (Buildix)",
+      "url": "https://www.buildix.trade/blog/how-to-spot-low-liquidity-crypto-perps-before-wrecked"
+    },
+    {
+      "title": "Low-Liquidity Crypto Indicators (Coin Bureau)",
+      "url": "https://coinbureau.com/guides/low-liquidity-crypto-indicators"
+    },
+    {
+      "title": "Open Interest Scanner: Reading OI Change With Taker Flow (AnomIQ)",
+      "url": "https://landing-page-astro-b0h.pages.dev/blog/open-interest-scanner/"
+    },
+    {
+      "title": "The 5-Gate Entry System (Gatesig)",
+      "url": "https://gatesig.pages.dev/docs/five-gates.html"
+    },
+    {
+      "title": "How 20 Seconds Can Make You a Better Investor (Kanebridge News)",
+      "url": "https://kanebridgenews.com/how-20-seconds-can-make-you-a-better-investorhow-20-seconds-can-make-you-a-better-investor/"
+    },
+    {
+      "title": "Gamification, overtrading and journaling (Mind the Market)",
+      "url": "https://mind-the-market-blog.pages.dev/articles/gamification-overtrading-journaling"
+    },
+    {
+      "title": "Binance Derivatives — Change Log",
+      "url": "https://developers.binance.com/docs/derivatives/change-log"
+    },
+    {
+      "title": "Telegram Bot API changelog",
+      "url": "https://core.telegram.org/bots/api-changelog"
+    },
+    {
+      "title": "python-telegram-bot on PyPI",
+      "url": "https://pypi.org/project/python-telegram-bot/"
+    }
   ]
 }
