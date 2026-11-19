@@ -1,23 +1,23 @@
 {
-  "date": "2026-11-18",
-  "generated_at": "2026-11-18T07:13:44+03:00",
-  "headline": "No API change breaks the bot today; the ideas check whether a mover's order book can take your full position, show who is behind a 15-minute move, and make the scanner wait 20 seconds while a cooldown is on.",
+  "date": "2026-11-19",
+  "generated_at": "2026-11-19T07:08:35+03:00",
+  "headline": "No API change affects the bot today; the ideas are about catching tilt early: an alert when your entries speed up, a calm-or-heated check on tilt alerts, and a short review before the first trade after a tilt day.",
   "ideas": [
     {
-      "title": "\"Too thin for your size\" check on the top picks",
-      "why": "At 20–40× your position is large for a small coin. For the 5 morning picks, read the order book and work out how far price would slip if you filled your usual size. If that slippage eats a big share of a normal scalp, the card says so before you enter.",
-      "effort": "medium",
-      "area": "scanner"
-    },
-    {
-      "title": "Who is moving it: 15-minute OI + taker label",
-      "why": "The scanner reads OI and taker flow on 1h, but you trade the 15m. Label each card \"new longs\", \"shorts closing\", \"new shorts\" or \"longs closing\" from the last 15m, so you can tell a move with fresh money behind it from a squeeze that may already be done.",
+      "title": "Speed-up alert: entries coming faster",
+      "why": "Revenge runs start as speed before they show up as losses. If three entries land inside 20 minutes, or your last gaps are under a third of your normal gap, the tilt guard pings you, win or lose. On 25 Oct you made 9 trades in an hour, which is this exact pattern.",
       "effort": "small",
-      "area": "scanner"
+      "area": "discipline"
     },
     {
-      "title": "20-second pause on the scanner during a cooldown",
-      "why": "After a loss, opening the scanner to find the next trade is the first step of a revenge run. While the tilt guard's cooldown is on, the scanner first shows today's P&L and your next allowed entry time for 20 seconds, then shows the coins.",
+      "title": "Heat check button on every tilt alert",
+      "why": "Each tilt alert asks one question with two buttons: \"Calm\" or \"Heated\" (fast breathing, tight jaw, thinking \"I need to win it back\"). Heated starts a 15-minute walk-away timer. /week shows how trades taken after a Heated tap turned out.",
+      "effort": "small",
+      "area": "discipline"
+    },
+    {
+      "title": "Review before trading the day after a tilt session",
+      "why": "If yesterday had a tilt session, the 08:00 brief asks three short questions first: what set it off, the first sign, and what you'll do at that sign next time. The picks show after you answer, and today's trade cap is halved.",
       "effort": "small",
       "area": "discipline"
     }
@@ -25,28 +25,20 @@
   "watch": [],
   "sources": [
     {
-      "title": "How to Spot a Low-Liquidity Crypto Perp Before It Wrecks You (Buildix)",
-      "url": "https://www.buildix.trade/blog/how-to-spot-low-liquidity-crypto-perps-before-wrecked"
+      "title": "Trading Tilt: Recognizing and Recovering from Emotional Flooding (TradesViz)",
+      "url": "https://www.tradesviz.com/trading-psychology/tilt/"
     },
     {
-      "title": "Low-Liquidity Crypto Indicators (Coin Bureau)",
-      "url": "https://coinbureau.com/guides/low-liquidity-crypto-indicators"
+      "title": "Why You Can't Stop Clicking (The Mental Edge)",
+      "url": "https://mentaledgetrading.beehiiv.com/p/why-you-can-t-stop-clicking"
     },
     {
-      "title": "Open Interest Scanner: Reading OI Change With Taker Flow (AnomIQ)",
-      "url": "https://landing-page-astro-b0h.pages.dev/blog/open-interest-scanner/"
+      "title": "Why Do I Go On Tilt? (TraderFeed, Brett Steenbarger)",
+      "url": "https://traderfeed.blogspot.com/2025/07/why-do-i-go-on-tilt.html"
     },
     {
-      "title": "The 5-Gate Entry System (Gatesig)",
-      "url": "https://gatesig.pages.dev/docs/five-gates.html"
-    },
-    {
-      "title": "How 20 Seconds Can Make You a Better Investor (Kanebridge News)",
-      "url": "https://kanebridgenews.com/how-20-seconds-can-make-you-a-better-investorhow-20-seconds-can-make-you-a-better-investor/"
-    },
-    {
-      "title": "Gamification, overtrading and journaling (Mind the Market)",
-      "url": "https://mind-the-market-blog.pages.dev/articles/gamification-overtrading-journaling"
+      "title": "From Tilt to Flow (The Perceptive Trader, Lawrence Briscoe)",
+      "url": "https://theperceptivetrader.substack.com/p/from-tilt-to-flow-my-journey-to-becoming"
     },
     {
       "title": "Binance Derivatives — Change Log",
@@ -57,8 +49,8 @@
       "url": "https://core.telegram.org/bots/api-changelog"
     },
     {
-      "title": "python-telegram-bot on PyPI",
-      "url": "https://pypi.org/project/python-telegram-bot/"
+      "title": "python-telegram-bot changelog",
+      "url": "https://docs.python-telegram-bot.org/en/latest/changelog.html"
     }
   ]
 }
