@@ -1,54 +1,28 @@
 {
-  "date": "2026-11-20",
-  "generated_at": "2026-11-20T07:25:00+03:00",
-  "headline": "No API change affects the bot today, and only two scanner ideas held up: show how close each mover is to its 7-day high, and tag trades that fade a sharp 15-minute spike, because new research says that bounce is too small to pay your fees.",
+  "date": "2026-11-21",
+  "generated_at": "2026-11-21T07:30:00+03:00",
+  "headline": "No API change affects the bot today and research was thin, so there are two risk ideas: count the room left today in stops instead of dollars, and check whether your real losing trades lose more than the $1 you plan to risk.",
   "ideas": [
     {
-      "title": "\"Near the high\" number on each scanner card",
-      "why": "A 2023 study found that, in liquid coins, being close to the recent high predicted the next move better than the raw % gain. Show \"0.6% under 7d high\" on each card from data the scanner already pulls, and only add it to the score if backtest.py shows it helps.",
+      "title": "\"Stops left today\" after every loss",
+      "why": "After each loss the guard says how many planned stops fit before the daily limit (e.g. 5 USDT room ÷ 1 USDT risk = 5). Under 3, it says to halve the next trade's size; at 0 you're done. You see the end of the day coming in trades, not after it's gone.",
       "effort": "small",
-      "area": "scanner"
+      "area": "risk"
     },
     {
-      "title": "Tag \"fade\" trades and show their results in /week",
-      "why": "A 2026 study of Binance 15m candles found sharp, taker-driven moves do bounce a little, but the edge (~1.3 bp) is far below a 5 bp round trip and gone within 4h. Tag entries that go against the last big 15m candle so /week shows if fading spikes costs you.",
-      "effort": "medium",
-      "area": "discipline"
+      "title": "Planned risk vs real loss in /week",
+      "why": "Your rules say risk about 1 USDT a trade, but leverage changes margin, not the loss at the stop. /week compares each losing trade with that 1 USDT: \"losers averaged 2.3× planned risk, 4 lost over 3×\". It shows if stops are skipped or size is set from leverage.",
+      "effort": "small",
+      "area": "risk"
     }
   ],
   "watch": [],
   "sources": [
-    {
-      "title": "Fičura (2023), Impact of size and volume on cryptocurrency momentum and reversal (FFA Working Papers)",
-      "url": "https://wp.ffu.vse.cz/artkey/wps-202301-0003_impact-of-size-and-volume-on-cryptocurrency-momentum-and-reversal.php"
-    },
-    {
-      "title": "Kitron & Wengrowicz (2026), Short-horizon mean reversion in cryptocurrency markets: a matched cross-market measurement (arXiv)",
-      "url": "https://arxiv.org/pdf/2608.21888"
-    },
-    {
-      "title": "Zaremba et al. (2021), Up or down? Short-term reversal, momentum, and liquidity effects in cryptocurrency markets (RePEc)",
-      "url": "https://ideas.repec.org/a/eee/finana/v78y2021ics1057521921002349.html"
-    },
-    {
-      "title": "Wu & Pinsky (2026), Lagged momentum and reversal strategies across daytime and overnight sessions in Bitcoin and Ethereum (JRFM)",
-      "url": "https://www.mdpi.com/1911-8074/19/9/692"
-    },
-    {
-      "title": "How to spot bull and bear market traps in crypto before they catch you (Cointelegraph)",
-      "url": "https://cointelegraph.com/news/how-to-spot-bull-and-bear-market-traps-in-crypto-before-they-catch-you"
-    },
-    {
-      "title": "Crypto Mean Reversion Trading (Philipp Dubach)",
-      "url": "https://philippdubach.com/posts/crypto-mean-reversion-trading/"
-    },
-    {
-      "title": "Binance Derivatives — Change Log",
-      "url": "https://developers.binance.com/docs/derivatives/change-log"
-    },
-    {
-      "title": "Telegram Bot API changelog",
-      "url": "https://core.telegram.org/bots/api-changelog"
-    }
+    {"title": "Position sizing after a loss: Why the buffer matters more than the stop (FXStreet)", "url": "https://www.fxstreet.com/education/position-sizing-after-a-loss-why-the-buffer-matters-more-than-the-stop-202609210543"},
+    {"title": "Position sizing with leverage: how to size crypto futures positions (Kraken Learn, 18 Jun 2026)", "url": "https://www.kraken.com/gb/learn/futures-trading-position-sizing-leverage"},
+    {"title": "The maths behind safe leverage: preventing margin calls (London Loves Business, 17 Jul 2026)", "url": "https://londonlovesbusiness.com/math-safe-leverage-preventing-margin-calls/"},
+    {"title": "Binance USDⓈ-M Futures change log", "url": "https://developers.binance.info/en/docs/products/derivatives-trading-usds-futures/change-log"},
+    {"title": "Binance will adjust tick sizes for six USDⓈ-M perpetual futures contracts (TradingView News)", "url": "https://www.tradingview.com/news/binance_news:70d13161f094b:0-binance-will-adjust-tick-sizes-for-six-usd-m-perpetual-futures-contracts/"},
+    {"title": "python-telegram-bot changelog", "url": "https://docs.python-telegram-bot.org/en/latest/changelog.html"}
   ]
 }
